@@ -89,6 +89,17 @@ type EvalInput struct {
 	InnerSandbox InnerSandbox
 }
 
+// JudgeInput is what a harness needs to build one LLM-judge session: the
+// grading prompt, the turn ceiling, the agent's workspace (which the judge may
+// only read), and the JSON Schema the verdicts must satisfy. The session runs
+// in its own directory, never in the workspace it grades.
+type JudgeInput struct {
+	Prompt    string
+	MaxTurns  int
+	Workspace string // the agent's workspace, exposed to the judge read-only
+	Schema    string // JSON Schema of the verdicts object
+}
+
 // DefaultJudgeMaxTurns is the agent-turn ceiling for an LLM-judge session on
 // harnesses that support one: enough turns to explore a finished workspace and
 // grade all of a case's llm assertions in one batch, while staying below

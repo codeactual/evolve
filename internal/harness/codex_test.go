@@ -4,6 +4,8 @@
 package harness
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -182,5 +184,53 @@ func TestCodexSpecsEnableDefaultExcludes(t *testing.T) {
 		if !containsPair(argv, "-c", flag) {
 			t.Errorf("%s argv lacks -c %s: %v", name, flag, argv)
 		}
+	}
+}
+
+func TestCodexJudgeSpec(t *testing.T) {
+	judgeDir, ws := t.TempDir(), t.TempDir()
+	t.Setenv("CODEX_HOME", t.TempDir())
+	schema := `{"type":"object","additionalProperties":false}`
+	spec := NewCodex().JudgeSpec(judgeDir, model.JudgeInput{
+		Prompt: "grade it", MaxTurns: 16, Workspace: ws, Schema: schema,
+	}, "gpt-5.5")
+
+	schemaPath := filepath.Join(judgeDir, "verdicts.schema.json")
+	want := []string{
+		"codex", "exec", "grade it", "--json", "--skip-git-repo-check",
+		"--sandbox", "read-only", "--ignore-rules", "--ephemeral",
+		"-m", "gpt-5.5",
+		"--output-schema", schemaPath,
+		"-c", "shell_environment_policy.ignore_default_excludes=false",
+	}
+	if !slices.Equal(spec.Argv, want) {
+		t.Errorf("judge argv =\n%v\nwant\n%v", spec.Argv, want)
+	}
+	if spec.Dir != judgeDir {
+		t.Errorf("Dir = %q, want the judge directory %q, never the workspace", spec.Dir, judgeDir)
+	}
+	if !slices.Contains(spec.ReadPaths, ws) {
+		t.Errorf("ReadPaths = %v, want the workspace (read-only view)", spec.ReadPaths)
+	}
+	if got, err := os.ReadFile(schemaPath); err != nil || string(got) != schema {
+		t.Errorf("schema file = %q, %v; want the grade schema bytes", got, err)
+	}
+	if !slices.Contains(spec.Env, "CODEX_HOME="+isolatedDir(judgeDir, codexHomeRel)) {
+		t.Errorf("CODEX_HOME must live under the judge directory: %v", spec.Env)
+	}
+}
+
+func TestCodexParseJudgeOutput(t *testing.T) {
+	const payload = `{"verdicts":[{"id":1,"passed":true,"evidence":"e"}]}`
+	stream := `{"type":"thread.started","thread_id":"t"}
+{"type":"item.completed","item":{"id":"i0","type":"agent_message","text":"Let me look at the files."}}
+{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":` + "\"" + strings.ReplaceAll(payload, `"`, `\"`) + "\"" + `}}
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}`
+	got, err := NewCodex().ParseJudgeOutput([]byte(stream))
+	if err != nil || string(got) != payload {
+		t.Errorf("ParseJudgeOutput = %q, %v; want the last agent message %s", got, err, payload)
+	}
+	if _, err := NewCodex().ParseJudgeOutput([]byte(`{"type":"turn.started"}`)); err == nil {
+		t.Error("a stream with no agent message must be an error")
 	}
 }

@@ -314,3 +314,79 @@ func TestClaudeEnvCredentials(t *testing.T) {
 		}
 	}
 }
+
+func TestClaudeJudgeSpec(t *testing.T) {
+	judgeDir, ws := t.TempDir(), t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	schema := `{"type":"object"}`
+	spec := NewClaude().JudgeSpec(judgeDir, model.JudgeInput{
+		Prompt: "grade it", MaxTurns: 16, Workspace: ws, Schema: schema,
+	}, "sonnet")
+
+	want := []string{
+		"claude", "-p", "grade it", "--model", "sonnet",
+		"--output-format", "stream-json", "--verbose", "--max-turns", "16",
+		"--restricted", "--safe-mode", "--strict-mcp-config",
+		"--tools", "Read,Grep,Glob",
+		"--permission-mode", "dontAsk",
+		"--add-dir", ws,
+		"--json-schema", schema,
+	}
+	if !slices.Equal(spec.Argv, want) {
+		t.Errorf("judge argv =\n%v\nwant\n%v", spec.Argv, want)
+	}
+	for _, banned := range []string{"bypassPermissions", "--allowedTools", "--settings", "--dangerously-skip-permissions"} {
+		if slices.Contains(spec.Argv, banned) {
+			t.Errorf("judge argv must not carry %s: %v", banned, spec.Argv)
+		}
+	}
+	if spec.Dir != judgeDir {
+		t.Errorf("Dir = %q, want the judge directory %q, never the workspace", spec.Dir, judgeDir)
+	}
+	if !slices.Contains(spec.ReadPaths, ws) {
+		t.Errorf("ReadPaths = %v, want the workspace (read-only view)", spec.ReadPaths)
+	}
+	cfg := "CLAUDE_CONFIG_DIR=" + isolatedDir(judgeDir, claudeConfigRel)
+	if !slices.Contains(spec.Env, cfg) {
+		t.Errorf("env lacks %s: %v", cfg, spec.Env)
+	}
+	for _, e := range spec.Env {
+		if strings.HasPrefix(e, "CLAUDE_CONFIG_DIR=") && strings.Contains(e, ws) {
+			t.Errorf("the judge's config dir %q is inside the agent-writable workspace", e)
+		}
+	}
+}
+
+func TestClaudeParseJudgeOutputStructured(t *testing.T) {
+	const payload = `{"verdicts":[{"id":1,"passed":true,"evidence":"e"}]}`
+	stream := `{"type":"system","subtype":"init"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Sure, here:"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"some prose","structured_output":` + payload + `}`
+	got, err := NewClaude().ParseJudgeOutput([]byte(stream))
+	if err != nil || string(got) != payload {
+		t.Errorf("ParseJudgeOutput = %q, %v; want the structured_output object %s", got, err, payload)
+	}
+}
+
+func TestClaudeParseJudgeOutputStrictFallback(t *testing.T) {
+	const payload = `{"verdicts":[{"id":1,"passed":true,"evidence":"e"}]}`
+	result := func(text string) []byte {
+		b, _ := json.Marshal(text)
+		return []byte(`{"type":"result","subtype":"success","is_error":false,"result":` + string(b) + `}`)
+	}
+	if got, err := NewClaude().ParseJudgeOutput(result("\n" + payload + "\n")); err != nil || string(got) != payload {
+		t.Errorf("a whole-JSON result = %q, %v; want it accepted as %s", got, err, payload)
+	}
+	for name, text := range map[string]string{
+		"prose-wrapped JSON": "Sure! " + payload,
+		"code fence":         "```json\n" + payload + "\n```",
+		"empty result":       "",
+	} {
+		if got, err := NewClaude().ParseJudgeOutput(result(text)); err == nil {
+			t.Errorf("%s: accepted %q, want an error (no substring scan)", name, got)
+		}
+	}
+	if _, err := NewClaude().ParseJudgeOutput([]byte("not a stream")); err == nil {
+		t.Error("a stream without a result event must be an error")
+	}
+}

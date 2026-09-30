@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -144,6 +145,62 @@ func (c *Codex) EvalSpec(ws string, in model.EvalInput, cliModelID string) model
 		Env:       env,
 		ReadPaths: readPaths,
 	}
+}
+
+// judgeSchemaFile is the verdict schema's file name inside the judge directory.
+const judgeSchemaFile = "verdicts.schema.json"
+
+// JudgeSpec builds the grading session: its own directory (never the workspace)
+// with a fresh CODEX_HOME under it, Codex's read-only sandbox, --ignore-rules
+// and --ephemeral so no rules file or session state carries over, the shell
+// environment excludes on, and --output-schema so the final message must be the
+// verdicts object. The workspace it grades is visible read-only through evolve's
+// sandbox, and read-only for Codex's own.
+func (c *Codex) JudgeSpec(judgeDir string, in model.JudgeInput, cliModelID string) model.CommandSpec {
+	schemaPath := filepath.Join(judgeDir, judgeSchemaFile)
+	// Best-effort like the rest of the isolation setup: if the write fails the
+	// CLI errors on the missing schema file, which surfaces as a judge error.
+	_ = os.MkdirAll(judgeDir, 0o755)
+	_ = os.WriteFile(schemaPath, []byte(in.Schema), 0o644)
+	env, readPaths := codexEnv(judgeDir)
+	argv := []string{
+		"codex", "exec", in.Prompt, "--json", "--skip-git-repo-check",
+		"--sandbox", "read-only", "--ignore-rules", "--ephemeral",
+		"-m", cliModelID,
+		"--output-schema", schemaPath,
+	}
+	argv = append(argv, codexShellEnvPolicy...)
+	return model.CommandSpec{
+		Argv: argv, Dir: judgeDir, Env: env,
+		ReadPaths: append(readPaths, in.Workspace),
+	}
+}
+
+// ParseJudgeOutput returns the last agent message, which --output-schema
+// constrains to the verdicts object; the strict decode that follows rejects
+// anything else. It never searches earlier messages or prose for JSON.
+func (c *Codex) ParseJudgeOutput(stdout []byte) ([]byte, error) {
+	var last string
+	found := false
+	for line := range strings.SplitSeq(string(stdout), "\n") {
+		var event struct {
+			Type string `json:"type"`
+			Item struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"item"`
+		}
+		if json.Unmarshal([]byte(line), &event) != nil {
+			continue
+		}
+		if event.Type == "item.completed" && event.Item.Type == "agent_message" {
+			last, found = event.Item.Text, true
+		}
+	}
+	if !found {
+		return nil, errors.New("the judge produced no agent message")
+	}
+	return wholeJSONObject(last)
 }
 
 // ParseEvalOutput concatenates agent messages from the codex event stream and

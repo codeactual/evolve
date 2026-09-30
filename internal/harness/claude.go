@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -216,6 +217,9 @@ type claudeEvent struct {
 	Usage         *claudeUsage     `json:"usage"`
 	TotalCostUSD  *float64         `json:"total_cost_usd"`
 	RateLimitInfo *claudeRateLimit `json:"rate_limit_info"`
+	// StructuredOutput is the object a --json-schema run validated and returned,
+	// verbatim, on its result event.
+	StructuredOutput json.RawMessage `json:"structured_output"`
 }
 
 // scanEvents walks Claude Code's stream-json output once: it returns the
@@ -291,6 +295,71 @@ func (c *Claude) EvalSpec(ws string, in model.EvalInput, cliModelID string) mode
 	}
 	env, readPaths := claudeEnv(ws)
 	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
+}
+
+// JudgeSpec builds the grading session. The judge reads the workspace it grades
+// and nothing else can be trusted to stay put, so it runs with every path that
+// content under test could use to act through it closed:
+//
+//   - its own directory (never the workspace) and its own fresh CLAUDE_CONFIG_DIR
+//     under that directory, so an agent-planted user-level settings.json,
+//     apiKeyHelper or env block is never loaded;
+//   - --restricted: no code-running tools, user/project/local settings ignored,
+//     file tools confined to the working directory plus --add-dir, and
+//     bypassPermissions refused;
+//   - --safe-mode: no CLAUDE.md, skills, plugins, hooks, MCP servers or custom
+//     commands from the workspace;
+//   - --tools Read,Grep,Glob and --permission-mode dontAsk: reads only, anything
+//     else denied;
+//   - --json-schema: the verdicts arrive as validated structured output.
+//
+// Confirmed live against claude 2.1.285 (2026-09-30): with --restricted and
+// --tools Read,Grep,Glob the session's init event lists exactly Glob, Grep, Read
+// and StructuredOutput, in permissionMode dontAsk. The judge workspace is
+// exposed through --add-dir and, inside evolve's sandbox, bound read-only.
+func (c *Claude) JudgeSpec(judgeDir string, in model.JudgeInput, cliModelID string) model.CommandSpec {
+	argv := []string{
+		"claude", "-p", in.Prompt,
+		"--model", cliModelID,
+		"--output-format", "stream-json",
+		"--verbose",
+		"--max-turns", strconv.Itoa(in.MaxTurns),
+		"--restricted", "--safe-mode", "--strict-mcp-config",
+		"--tools", "Read,Grep,Glob",
+		"--permission-mode", "dontAsk",
+		"--add-dir", in.Workspace,
+		"--json-schema", in.Schema,
+	}
+	env, readPaths := claudeEnv(judgeDir)
+	return model.CommandSpec{
+		Argv: argv, Dir: judgeDir, Env: env,
+		ReadPaths: append(readPaths, in.Workspace),
+	}
+}
+
+// ParseJudgeOutput returns the verdicts object from the result event: the
+// validated structured_output when present, otherwise the result text if it is
+// itself the whole JSON object. There is no substring scan, so a verdict block
+// quoted from the content under test can never stand in for the judge's answer.
+func (c *Claude) ParseJudgeOutput(stdout []byte) ([]byte, error) {
+	result, found, _, _ := scanEvents(stdout)
+	if !found {
+		return nil, errors.New("no result event in the judge's output")
+	}
+	if len(bytes.TrimSpace(result.StructuredOutput)) > 0 && !bytes.Equal(bytes.TrimSpace(result.StructuredOutput), []byte("null")) {
+		return bytes.TrimSpace(result.StructuredOutput), nil
+	}
+	return wholeJSONObject(result.Result)
+}
+
+// wholeJSONObject accepts text only when it is, after trimming whitespace,
+// exactly one JSON object — no prose, code fences, or second value around it.
+func wholeJSONObject(text string) ([]byte, error) {
+	trimmed := bytes.TrimSpace([]byte(text))
+	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return nil, errors.New("the judge's final message is not a single JSON object")
+	}
+	return trimmed, nil
 }
 
 // ParseEvalOutput reads the final answer and usage from the terminal result

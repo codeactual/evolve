@@ -94,6 +94,18 @@ func (f *fakeEvalProvider) EvalSpec(ws string, c model.EvalInput, _ string) mode
 	return model.CommandSpec{Argv: []string{"agent-cli", "AGENT", c.Prompt, strconv.Itoa(c.MaxTurns)}, Dir: ws}
 }
 
+// JudgeSpec rides the turn ceiling, prompt and schema in the argv so judge tests
+// can assert what the engine handed the harness.
+func (f *fakeEvalProvider) JudgeSpec(judgeDir string, in model.JudgeInput, _ string) model.CommandSpec {
+	return model.CommandSpec{
+		Argv:      []string{"judge-cli", "JUDGE", in.Prompt, strconv.Itoa(in.MaxTurns), in.Schema},
+		Dir:       judgeDir,
+		ReadPaths: []string{in.Workspace},
+	}
+}
+
+func (f *fakeEvalProvider) ParseJudgeOutput(stdout []byte) ([]byte, error) { return stdout, nil }
+
 func (f *fakeEvalProvider) ParseEvalOutput(stdout []byte) (string, *model.Usage) {
 	if !f.reportsUsage {
 		return string(stdout), nil

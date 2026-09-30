@@ -155,7 +155,7 @@ func (f *SweepFlags) judgeModel(cmd *cobra.Command) string {
 func (f *SweepFlags) resolveJudge(cmd *cobra.Command, common run.Options, warn io.Writer) (grade.Judge, error) {
 	sel, err := opts.JudgeSelection(f.judgeModel(cmd))
 	if err == nil {
-		return run.NewHarnessJudge(sel, common.Runner, common.InnerSandbox)
+		return run.NewHarnessJudge(sel, common.Runner, common.KeepWorkspaces)
 	}
 	explicit := cmd.Flags().Changed("judge-model") ||
 		(opts.Viper != nil && opts.Viper.IsSet("judge_model") && opts.Viper.GetString("judge_model") != "")

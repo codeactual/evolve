@@ -35,12 +35,21 @@ type Harness interface {
 
 // EvalRunner is the optional capability of running behavioral evals. Harnesses
 // implement it only when their CLI supports a gradable headless run; engines
-// type-assert and degrade for those that do not. The LLM judge reuses
-// EvalSpec at the judge turn ceiling (model.DefaultJudgeMaxTurns): its
-// confinement is evolve's OS sandbox plus the agent CLI's own, never a
-// judge-specific tool allowlist.
+// type-assert and degrade for those that do not. The LLM judge runs through
+// JudgeSpec: a session in its own directory with a fresh CLI config home, a
+// read-only view of the workspace it grades, code-running tools, hooks, MCP and
+// project settings disabled, and schema-constrained structured output.
 type EvalRunner interface {
 	EvalSpec(ws string, c model.EvalInput, cliModelID string) model.CommandSpec
+	// JudgeSpec builds the LLM-judge session for in: it runs in judgeDir (never
+	// the workspace), may read in.Workspace but not write it, and must report its
+	// verdicts as structured output matching in.Schema.
+	JudgeSpec(judgeDir string, in model.JudgeInput, cliModelID string) model.CommandSpec
+	// ParseJudgeOutput extracts the structured verdicts payload from a judge
+	// session's full stdout. It never scans prose for JSON: the payload is the
+	// structured-output field, or a final message that is itself the whole
+	// object.
+	ParseJudgeOutput(stdout []byte) ([]byte, error)
 	// ParseEvalOutput extracts the final assistant text and measured usage from
 	// the CLI's full stdout. usage is nil where unsupported.
 	ParseEvalOutput(stdout []byte) (finalText string, usage *model.Usage)
