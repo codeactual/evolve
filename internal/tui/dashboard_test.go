@@ -182,8 +182,10 @@ func TestBaselineRunningLifecycle(t *testing.T) {
 	}
 
 	// Completion settles the row.
-	d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{Label: "e1", Status: plan.StatusPass,
-		Metrics: plan.ItemMetrics{AvgRunSeconds: new(2.0)}}})
+	d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{
+		Label: "e1", Status: plan.StatusPass,
+		Metrics: plan.ItemMetrics{AvgRunSeconds: new(2.0)},
+	}})
 	if cr.baselineRunning || cr.status != stPass {
 		t.Errorf("after itemDone: baselineRunning=%v status=%v, want false + pass", cr.baselineRunning, cr.status)
 	}
@@ -245,23 +247,38 @@ func TestCaseAggStatusThresholds(t *testing.T) {
 		want status
 	}{
 		{"all pass", []*caseState{trig(stPass), eval(stPass)}, stPass},
-		{"error wins over a passing rate",
-			[]*caseState{trig(stPass), trig(stPass), trig(stError)}, stError},
-		{"triggers at the 50% gate",
-			[]*caseState{trig(stPass), trig(stFail)}, stPassThreshold},
-		{"triggers below the gate",
-			[]*caseState{trig(stPass), trig(stFail), trig(stFail)}, stFail},
+		{
+			"error wins over a passing rate",
+			[]*caseState{trig(stPass), trig(stPass), trig(stError)},
+			stError,
+		},
+		{
+			"triggers at the 50% gate",
+			[]*caseState{trig(stPass), trig(stFail)},
+			stPassThreshold,
+		},
+		{
+			"triggers below the gate",
+			[]*caseState{trig(stPass), trig(stFail), trig(stFail)},
+			stFail,
+		},
 		{"evals above the 66% gate", // 2/3 ≈ 0.667
 			[]*caseState{eval(stPass), eval(stPass), eval(stFail)}, stPassThreshold},
 		{"evals below the gate", // 1/2 = 0.5
 			[]*caseState{eval(stPass), eval(stFail)}, stFail},
 		{"worst tier wins", // triggers 1/2 meets its gate, evals 0/1 misses its own
 			[]*caseState{trig(stPass), trig(stFail), eval(stFail)}, stFail},
-		{"threshold tier beats a clean tier",
-			[]*caseState{trig(stPass), eval(stPass), eval(stPass), eval(stFail)}, stPassThreshold},
+		{
+			"threshold tier beats a clean tier",
+			[]*caseState{trig(stPass), eval(stPass), eval(stPass), eval(stFail)},
+			stPassThreshold,
+		},
 		{"all skipped", []*caseState{trig(stSkipped), eval(stSkipped)}, stSkipped},
-		{"count-only ranks below a pass",
-			[]*caseState{trig(stCount), trig(stSkipped)}, stCount},
+		{
+			"count-only ranks below a pass",
+			[]*caseState{trig(stCount), trig(stSkipped)},
+			stCount,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -287,18 +304,36 @@ func TestUnitFinishedThresholdStatus(t *testing.T) {
 		sum  run.UnitSummary
 		want status
 	}{
-		{"triggers at the 50% gate", tr,
-			run.UnitSummary{Executed: true, Passed: 1, Failed: 1, Total: 2}, stPassThreshold},
-		{"triggers below the gate", tr,
-			run.UnitSummary{Executed: true, Passed: 1, Failed: 2, Total: 3}, stFail},
-		{"evals above the 66% gate", ev,
-			run.UnitSummary{Executed: true, Passed: 2, Failed: 1, Total: 3}, stPassThreshold},
-		{"evals below the gate", ev,
-			run.UnitSummary{Executed: true, Passed: 1, Failed: 1, Total: 2}, stFail},
-		{"all passed stays green", tr,
-			run.UnitSummary{Executed: true, Passed: 2, Total: 2}, stPass},
-		{"an error still wins", tr,
-			run.UnitSummary{Executed: true, Passed: 1, Failed: 1, Errored: 1, Total: 3}, stError},
+		{
+			"triggers at the 50% gate", tr,
+			run.UnitSummary{Executed: true, Passed: 1, Failed: 1, Total: 2},
+			stPassThreshold,
+		},
+		{
+			"triggers below the gate", tr,
+			run.UnitSummary{Executed: true, Passed: 1, Failed: 2, Total: 3},
+			stFail,
+		},
+		{
+			"evals above the 66% gate", ev,
+			run.UnitSummary{Executed: true, Passed: 2, Failed: 1, Total: 3},
+			stPassThreshold,
+		},
+		{
+			"evals below the gate", ev,
+			run.UnitSummary{Executed: true, Passed: 1, Failed: 1, Total: 2},
+			stFail,
+		},
+		{
+			"all passed stays green", tr,
+			run.UnitSummary{Executed: true, Passed: 2, Total: 2},
+			stPass,
+		},
+		{
+			"an error still wins", tr,
+			run.UnitSummary{Executed: true, Passed: 1, Failed: 1, Errored: 1, Total: 3},
+			stError,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -427,12 +462,12 @@ func TestDashboardMouseTabsAndFooter(t *testing.T) {
 	l := d.layout()
 
 	border := ansi.Strip(strings.Split(d.view(), "\n")[l.rollup.y0])
-	idx := strings.Index(border, "Regressions")
-	if idx < 0 {
+	before, _, ok := strings.Cut(border, "Regressions")
+	if !ok {
 		t.Fatalf("tab strip missing from the border row %q", border)
 	}
 	d.rollupScroll = 2
-	d.handleMouse(leftClick(ansi.StringWidth(border[:idx]), l.rollup.y0))
+	d.handleMouse(leftClick(ansi.StringWidth(before), l.rollup.y0))
 	if d.tab != tabRegressions || d.focus != paneRollup || d.rollupScroll != 0 {
 		t.Errorf("tab=%v focus=%v scroll=%d, want the Regressions tab focused with the scroll reset",
 			d.tab, d.focus, d.rollupScroll)

@@ -207,8 +207,8 @@ func needContentHashes(opts Options, sc plan.SkillCatalog, def plan.Tiers) (trig
 // needTriggers records, for each of a skill's triggers, whether each model would
 // run it and the aggregate preselect note — the same predicate the engine uses.
 func needTriggers(opts Options, sc plan.SkillCatalog, sels []harness.Selection, flags bool,
-	file *results.File, content string, need map[string]map[plan.CaseRef]bool, notes map[plan.CaseRef]string) {
-
+	file *results.File, content string, need map[string]map[plan.CaseRef]bool, notes map[plan.CaseRef]string,
+) {
 	for _, t := range sc.Triggers {
 		cr := plan.CaseRef{Skill: sc.Skill, Kind: plan.KindTriggers, Case: t.Query}
 		var freshSpec string
@@ -237,8 +237,8 @@ func needTriggers(opts Options, sc plan.SkillCatalog, sels []harness.Selection, 
 
 // needEvals is needTriggers for the eval tier, honoring evalFilter.
 func needEvals(opts Options, sc plan.SkillCatalog, sels []harness.Selection, flags bool,
-	file *results.File, content, evalFilter string, need map[string]map[plan.CaseRef]bool, notes map[plan.CaseRef]string) {
-
+	file *results.File, content, evalFilter string, need map[string]map[plan.CaseRef]bool, notes map[plan.CaseRef]string,
+) {
 	for _, c := range sc.Evals {
 		if evalFilter != "" && c.ID != evalFilter {
 			continue

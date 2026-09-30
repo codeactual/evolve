@@ -157,7 +157,8 @@ func (o *Options) UnsupportedModelWarnings() ([]string, error) {
 		}
 		warnings = append(warnings, fmt.Sprintf(
 			"model %s has no available harness (supported by %s); it will not run",
-			m.ID, strings.Join(m.SupportedHarnessIDs(), ", ")))
+			m.ID, strings.Join(m.SupportedHarnessIDs(), ", "),
+		))
 	}
 	return warnings, nil
 }

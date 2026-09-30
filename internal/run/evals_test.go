@@ -43,11 +43,13 @@ func (r *captureReporter) BaselineStarted(_ plan.UnitRef, item ItemStart) {
 	defer r.mu.Unlock()
 	r.baselineStarts = append(r.baselineStarts, item)
 }
+
 func (r *captureReporter) ItemDone(_ plan.UnitRef, item ItemResult) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.items = append(r.items, item)
 }
+
 func (r *captureReporter) BaselineDone(_ plan.UnitRef, item ItemResult) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -69,6 +71,7 @@ func (f *fakeEvalProvider) Name() string        { return "Fake" }
 func (f *fakeEvalProvider) CLI() []string       { return []string{"sh"} }
 func (f *fakeEvalProvider) EnvKeys() []string   { return []string{"FAKE_KEY"} }
 func (f *fakeEvalProvider) SkillDirs() []string { return []string{filepath.Join(".fake", "skills")} }
+
 func (f *fakeEvalProvider) canonicalModel() model.Model {
 	m := model.Model{
 		ID: "fake/model-1", ProviderID: "fake", Name: "Fake Model 1",
@@ -80,15 +83,17 @@ func (f *fakeEvalProvider) canonicalModel() model.Model {
 	}
 	return m
 }
-func (f *fakeEvalProvider) TriggerSpec(ws, query, cliModelID string, _ bool) model.CommandSpec {
+
+func (f *fakeEvalProvider) TriggerSpec(ws, query, _ string, _ bool) model.CommandSpec {
 	return model.CommandSpec{Argv: []string{"fake-cli", query}, Dir: ws}
 }
 func (f *fakeEvalProvider) ScanLine([]byte, string, string) (bool, string) { return false, "" }
-func (f *fakeEvalProvider) EvalSpec(ws string, c model.EvalInput, cliModelID string) model.CommandSpec {
+func (f *fakeEvalProvider) EvalSpec(ws string, c model.EvalInput, _ string) model.CommandSpec {
 	// MaxTurns rides along in the argv so judge tests can assert the judge
 	// session runs at the judge turn ceiling.
 	return model.CommandSpec{Argv: []string{"agent-cli", "AGENT", c.Prompt, strconv.Itoa(c.MaxTurns)}, Dir: ws}
 }
+
 func (f *fakeEvalProvider) ParseEvalOutput(stdout []byte) (string, *model.Usage) {
 	if !f.reportsUsage {
 		return string(stdout), nil
@@ -162,7 +167,7 @@ func evalRepoFixture(t *testing.T) *layout.Repo {
 	write := func(rel, content string) {
 		t.Helper()
 		path := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		mustMkdirAll(t, filepath.Dir(path), 0o755)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -199,7 +204,7 @@ func evalRepoWithToolCall(t *testing.T) *layout.Repo {
 	write := func(rel, content string) {
 		t.Helper()
 		path := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		mustMkdirAll(t, filepath.Dir(path), 0o755)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -470,7 +475,7 @@ func TestEvalsProviderWithoutUsage(t *testing.T) {
 func TestEvalsDetectsFailure(t *testing.T) {
 	repo := evalRepoFixture(t)
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "evals.json")
-	os.WriteFile(path, []byte(`{"evals": [{
+	mustWriteFile(t, path, []byte(`{"evals": [{
 		"id": "fails",
 		"prompt": "create the file",
 		"assertions": [{"type": "file_exists", "path": "never-created.txt"}]
@@ -565,7 +570,7 @@ func TestEvalsRuntimeErrorRerunUnderNew(t *testing.T) {
 func TestEvalsFailedRerunsFailingUnit(t *testing.T) {
 	repo := evalRepoFixture(t)
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "evals.json")
-	os.WriteFile(path, []byte(`{"evals": [{
+	mustWriteFile(t, path, []byte(`{"evals": [{
 		"id": "fails",
 		"prompt": "create the file",
 		"assertions": [{"type": "file_exists", "path": "never-created.txt"}]
@@ -637,7 +642,7 @@ func TestEvalsFailedPreservesAndNarrows(t *testing.T) {
 	repo := evalRepoFixture(t)
 	// Two evals: "good" passes (created.txt is made), "bad" fails its assertion.
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "evals.json")
-	os.WriteFile(path, []byte(`{"evals": [
+	mustWriteFile(t, path, []byte(`{"evals": [
 		{"id": "good", "prompt": "create the file", "assertions": [{"type": "file_exists", "path": "created.txt"}]},
 		{"id": "bad", "prompt": "create the file", "assertions": [{"type": "file_exists", "path": "never-created.txt"}]}
 	]}`), 0o644)

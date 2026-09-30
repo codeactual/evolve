@@ -314,3 +314,19 @@ func containsSubstring(haystack []string, substr string) bool {
 	}
 	return false
 }
+
+// mustWriteFile writes fixture data, failing the test on error.
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// mustMkdirAll creates a fixture directory tree, failing the test on error.
+func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatal(err)
+	}
+}

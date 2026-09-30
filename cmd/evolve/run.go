@@ -49,7 +49,7 @@ func failOrWarn(cmd *cobra.Command, format string, args ...any) error {
 	if runFlags.Strict {
 		return fmt.Errorf("%s: %w", msg, cli.ErrFailures)
 	}
-	fmt.Fprintf(cmd.ErrOrStderr(), "WARN: %s (pass --strict to exit 1)\n", msg)
+	outf(cmd.ErrOrStderr(), "WARN: %s (pass --strict to exit 1)\n", msg)
 	return nil
 }
 
@@ -158,7 +158,7 @@ func (f *SweepFlags) resolveJudge(cmd *cobra.Command, common run.Options, warn i
 	if explicit {
 		return nil, err
 	}
-	fmt.Fprintf(warn, "WARN: %v; llm assertions will fail\n", err)
+	outf(warn, "WARN: %v; llm assertions will fail\n", err)
 	return run.UnavailableJudge{Reason: err.Error()}, nil
 }
 
@@ -193,7 +193,7 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 		return run.Options{}, err
 	}
 	for _, w := range warnings {
-		fmt.Fprintf(counterOut, "WARN: %s\n", w)
+		outf(counterOut, "WARN: %s\n", w)
 	}
 	counter, err := opts.Counter(counterOut)
 	if err != nil {

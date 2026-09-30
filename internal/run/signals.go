@@ -116,11 +116,13 @@ func (cfg CheckConfig) ValidateSignals() error {
 	case ideal > maxLines:
 		return fmt.Errorf(
 			"checks.ideal_skill_lines (%d) exceeds checks.max_skill_lines (%d)",
-			ideal, maxLines)
+			ideal, maxLines,
+		)
 	case ideal > limit:
 		return fmt.Errorf(
 			"checks.ideal_skill_lines (%d) is too close to checks.max_skill_lines (%d); keep it ≤ %d",
-			ideal, maxLines, limit)
+			ideal, maxLines, limit,
+		)
 	}
 	return nil
 }
@@ -183,7 +185,8 @@ func scoreSkill(repo *layout.Repo, skillMD string, cfg CheckConfig) (SkillSignal
 
 	sizeDetail := fmt.Sprintf("%d lines (ideal ≤%d, cap %d)", lines, sc.IdealSkillLines, cfg.MaxSkillLines)
 	sigs := make([]Signal, 0, 2+len(subs))
-	sigs = append(sigs,
+	sigs = append(
+		sigs,
 		Signal{Name: "size", Score: size, Detail: sizeDetail},
 		Signal{Name: "conciseness", Score: conc, Detail: "composite of sentence length, hedging, redundancy"},
 	)
@@ -196,13 +199,13 @@ func scoreSkill(repo *layout.Repo, skillMD string, cfg CheckConfig) (SkillSignal
 }
 
 // sizeScore maps a line count to a 0–100 score: 100 at or below ideal, 0 at or
-// above the cap, and a curve between the two governed by exponent. With
+// above the ceiling, and a curve between the two governed by exponent. With
 // exponent > 1 the penalty starts gently just past the ideal and accelerates
-// toward the cap, so the score doubles as an early warning that a skill is
+// toward the ceiling, so the score doubles as an early warning that a skill is
 // nearing the hard limit. exponent == 1 is a plain linear ramp.
-func sizeScore(lines, ideal, cap int, exponent float64) float64 {
+func sizeScore(lines, ideal, ceiling int, exponent float64) float64 {
 	switch {
-	case cap <= ideal:
+	case ceiling <= ideal:
 		// Degenerate config: no room for a gradient, fall back to a step.
 		if lines <= ideal {
 			return 100
@@ -210,10 +213,10 @@ func sizeScore(lines, ideal, cap int, exponent float64) float64 {
 		return 0
 	case lines <= ideal:
 		return 100
-	case lines >= cap:
+	case lines >= ceiling:
 		return 0
 	default:
-		t := float64(lines-ideal) / float64(cap-ideal)
+		t := float64(lines-ideal) / float64(ceiling-ideal)
 		return 100 * (1 - math.Pow(t, exponent))
 	}
 }

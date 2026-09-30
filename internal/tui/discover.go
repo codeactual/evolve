@@ -286,7 +286,8 @@ func (m discoverModel) View() tea.View {
 
 	keyHelp := "[type] filter · [↑↓]/[ctrl+jk] move · [tab] toggle · [ctrl+a] toggle all"
 	hint := footerHint.Render(clip(
-		keyHelp+" · [enter] add to "+m.dest+" · [esc] clear/cancel", max(m.w, 1)))
+		keyHelp+" · [enter] add to "+m.dest+" · [esc] clear/cancel", max(m.w, 1),
+	))
 
 	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, " "+evolveTitle(), "", pane, hint))
 	v.AltScreen = true

@@ -10,6 +10,8 @@ package plan
 // selected case). The form mutates these as the user toggles rows.
 type State int
 
+// State values: Partial follows the Needs baseline, Off excludes the node, and
+// On widens it.
 const (
 	Partial State = iota // zero value: follow the Needs baseline
 	Off

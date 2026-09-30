@@ -39,28 +39,65 @@ func TestJudgeSelection(t *testing.T) {
 		wantHarness  string
 		wantErr      string
 	}{
-		{"default token", []string{"claude"}, nil, nil, "",
-			"anthropic/claude-sonnet-5", "claude", ""},
-		{"bare id", []string{"claude"}, nil, nil, "claude-sonnet-5",
-			"anthropic/claude-sonnet-5", "claude", ""},
-		{"canonical id", []string{"claude"}, nil, nil, "anthropic/claude-sonnet-5",
-			"anthropic/claude-sonnet-5", "claude", ""},
-		{"unknown token", []string{"claude"}, nil, nil, "bogus",
-			"", "", "not a known model"},
+		{
+			"default token",
+			[]string{"claude"},
+			nil, nil, "",
+			"anthropic/claude-sonnet-5", "claude", "",
+		},
+		{
+			"bare id",
+			[]string{"claude"},
+			nil, nil, "claude-sonnet-5",
+			"anthropic/claude-sonnet-5", "claude", "",
+		},
+		{
+			"canonical id",
+			[]string{"claude"},
+			nil, nil, "anthropic/claude-sonnet-5",
+			"anthropic/claude-sonnet-5", "claude", "",
+		},
+		{
+			"unknown token",
+			[]string{"claude"},
+			nil, nil, "bogus",
+			"", "", "not a known model",
+		},
 		// The judge is a grading instrument: a `models` restriction on what is
 		// under test does not constrain it.
-		{"models restriction ignored", []string{"claude"}, nil, []string{"openai"}, "claude-sonnet-5",
-			"anthropic/claude-sonnet-5", "claude", ""},
+		{
+			"models restriction ignored",
+			[]string{"claude"},
+			nil,
+			[]string{"openai"},
+			"claude-sonnet-5",
+			"anthropic/claude-sonnet-5", "claude", "",
+		},
 		// A model only one harness supports binds to that harness when it is the
 		// only one installed.
-		{"codex-only model", []string{"codex"}, nil, nil, "gpt-5.5",
-			"openai/gpt-5.5", "codex", ""},
-		{"no harness installed", nil, nil, nil, "claude-sonnet-5",
-			"", "", "no installed harness can run judge sessions"},
-		{"model's harness not installed", []string{"codex"}, nil, nil, "claude-sonnet-5",
-			"", "", "no installed harness can run judge sessions"},
-		{"harnesses restriction respected", []string{"claude", "codex"}, []string{"codex"}, nil, "claude-sonnet-5",
-			"", "", "no installed harness can run judge sessions"},
+		{
+			"codex-only model",
+			[]string{"codex"},
+			nil, nil, "gpt-5.5",
+			"openai/gpt-5.5", "codex", "",
+		},
+		{
+			"no harness installed", nil, nil, nil, "claude-sonnet-5",
+			"", "", "no installed harness can run judge sessions",
+		},
+		{
+			"model's harness not installed",
+			[]string{"codex"},
+			nil, nil, "claude-sonnet-5",
+			"", "", "no installed harness can run judge sessions",
+		},
+		{
+			"harnesses restriction respected",
+			[]string{"claude", "codex"},
+			[]string{"codex"},
+			nil, "claude-sonnet-5",
+			"", "", "no installed harness can run judge sessions",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

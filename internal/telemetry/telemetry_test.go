@@ -71,7 +71,11 @@ func TestInitFileWinsOverEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	defer shutdown(context.Background())
+	defer func() {
+		if err := shutdown(context.Background()); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	}()
 	if prov.Mode != ModeFile {
 		t.Errorf("mode = %v, want file (the flag wins over OTEL_* env)", prov.Mode)
 	}

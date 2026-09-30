@@ -177,7 +177,7 @@ func postJSON(ctx context.Context, client *http.Client, url string, headers map[
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // best-effort: the response was fully read or abandoned
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		tail, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
 		return fmt.Errorf("HTTP %s: %s", resp.Status, bytes.TrimSpace(tail))

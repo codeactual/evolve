@@ -4,8 +4,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/codeactual/evolve/internal/plan"
@@ -44,7 +42,7 @@ var triggersCmd = &cobra.Command{
 		}
 
 		if !triggersFlags.CountOnly {
-			fmt.Fprintf(cmd.OutOrStdout(), "parallelism: %d concurrent agent runs\n", triggersFlags.Jobs)
+			outf(cmd.OutOrStdout(), "parallelism: %d concurrent agent runs\n", triggersFlags.Jobs)
 		}
 		failed, runErr := run.Triggers(cmd.Context(), run.TriggerOptions{
 			Options: common,

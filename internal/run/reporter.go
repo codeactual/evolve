@@ -107,20 +107,29 @@ func (l lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
+// emitf and emit write plain-output text. Write errors are dropped on purpose:
+// a closed or broken terminal has no useful recovery mid-run, and the results
+// themselves are persisted to the results files, not to this stream.
+func emitf(w io.Writer, format string, a ...any) { _, _ = fmt.Fprintf(w, format, a...) }
+
+func emit(w io.Writer, a ...any) { _, _ = fmt.Fprint(w, a...) }
+
+// UnitStarted prints the unit's banner line.
 func (r PlainReporter) UnitStarted(u plan.UnitRef, total, runs int, mode plan.Mode) {
 	m := "count-only"
 	if mode == plan.ModeRun {
 		m = "run"
 	}
 	if u.Kind == plan.KindTriggers {
-		fmt.Fprintf(r.Stdout, "\n=== %s / %s (%d queries x %d runs, %s) ===\n", u.Skill, u.Key, total, runs, m)
+		emitf(r.Stdout, "\n=== %s / %s (%d queries x %d runs, %s) ===\n", u.Skill, u.Key, total, runs, m)
 		return
 	}
-	fmt.Fprintf(r.Stdout, "\n=== %s / %s (%s) ===\n", u.Skill, u.Key, m)
+	emitf(r.Stdout, "\n=== %s / %s (%s) ===\n", u.Skill, u.Key, m)
 }
 
+// UnitSkipped prints the unit's banner line with its skip reason.
 func (r PlainReporter) UnitSkipped(u plan.UnitRef, reason string) {
-	fmt.Fprintf(r.Stdout, "\n=== %s / %s (skip: %s) ===\n", u.Skill, u.Key, reason)
+	emitf(r.Stdout, "\n=== %s / %s (skip: %s) ===\n", u.Skill, u.Key, reason)
 }
 
 // ItemStarted is a no-op for plain output: the historical line format reports
@@ -131,6 +140,8 @@ func (r PlainReporter) ItemStarted(plan.UnitRef, ItemStart) {}
 // reports a baseline only when it finishes (BaselineDone).
 func (r PlainReporter) BaselineStarted(plan.UnitRef, ItemStart) {}
 
+// ItemDone prints one finished item: triggers as a status line, evals as their
+// pre-rendered grading block.
 func (r PlainReporter) ItemDone(u plan.UnitRef, item ItemResult) {
 	if u.Kind == plan.KindEvals {
 		// A runtime-error diagnostic (the agent run produced no gradable output)
@@ -140,18 +151,19 @@ func (r PlainReporter) ItemDone(u plan.UnitRef, item ItemResult) {
 		if item.Status == plan.StatusError {
 			w = r.Stderr
 		}
-		fmt.Fprint(w, item.Detail) // pre-rendered, may span several lines
+		emit(w, item.Detail) // pre-rendered, may span several lines
 		return
 	}
-	fmt.Fprintf(r.Stdout, "  [%s] %s\n", marker(item.Status), item.Detail)
+	emitf(r.Stdout, "  [%s] %s\n", marker(item.Status), item.Detail)
 }
 
 // BaselineDone prints a concise one-line baseline result; the full grading block
 // belongs to the with-skill run, not its baseline.
-func (r PlainReporter) BaselineDone(u plan.UnitRef, item ItemResult) {
-	fmt.Fprintf(r.Stdout, "  [base %s] %s\n", marker(item.Status), item.Detail)
+func (r PlainReporter) BaselineDone(_ plan.UnitRef, item ItemResult) {
+	emitf(r.Stdout, "  [base %s] %s\n", marker(item.Status), item.Detail)
 }
 
+// UnitFinished prints the unit's pass tally and where its results were saved.
 func (r PlainReporter) UnitFinished(u plan.UnitRef, sum UnitSummary, savedRel string) {
 	if sum.Executed {
 		noun, extra := "queries", ""
@@ -161,14 +173,15 @@ func (r PlainReporter) UnitFinished(u plan.UnitRef, sum UnitSummary, savedRel st
 				extra = fmt.Sprintf(", %d errored", sum.Errored)
 			}
 		}
-		fmt.Fprintf(r.Stdout, "  %d/%d %s passed%s%s\n",
+		emitf(r.Stdout, "  %d/%d %s passed%s%s\n",
 			sum.Passed, sum.Total, noun, extra, avgSuffix(sum.AvgRunSeconds))
 	}
-	fmt.Fprintf(r.Stdout, "  -> %s\n", savedRel)
+	emitf(r.Stdout, "  -> %s\n", savedRel)
 }
 
+// Warn writes a warning line to stderr.
 func (r PlainReporter) Warn(format string, a ...any) {
-	fmt.Fprintf(r.Stderr, format, a...)
+	emitf(r.Stderr, format, a...)
 }
 
 // marker maps a status to its plain-output token.

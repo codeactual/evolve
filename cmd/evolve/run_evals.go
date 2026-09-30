@@ -4,8 +4,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/codeactual/evolve/internal/plan"
@@ -48,7 +46,7 @@ var evalsCmd = &cobra.Command{
 		}
 
 		if !evalsFlags.CountOnly {
-			fmt.Fprintf(cmd.OutOrStdout(), "parallelism: %d concurrent evals\n", evalsFlags.Jobs)
+			outf(cmd.OutOrStdout(), "parallelism: %d concurrent evals\n", evalsFlags.Jobs)
 		}
 		failed, runErr := run.Evals(cmd.Context(), run.EvalOptions{
 			Options:    common,

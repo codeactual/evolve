@@ -57,11 +57,11 @@ func reconcileStaleResults(cmd *cobra.Command, interactive bool) error {
 		if err := opts.DropStaleResults(stale); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "stale-results: dropped %d model(s) outside the configured models: %s\n",
+		outf(out, "stale-results: dropped %d model(s) outside the configured models: %s\n",
 			len(models), strings.Join(models, ", "))
 		return nil
 	}
-	fmt.Fprintf(out, "stale-results: kept %d model(s) outside the configured models on disk "+
+	outf(out, "stale-results: kept %d model(s) outside the configured models on disk "+
 		"(excluded from reports); pass --stale-results=drop to prune: %s\n",
 		len(models), strings.Join(models, ", "))
 	return nil
@@ -70,9 +70,9 @@ func reconcileStaleResults(cmd *cobra.Command, interactive bool) error {
 // promptStaleResults asks the user whether to keep or drop stale results.
 func promptStaleResults(cmd *cobra.Command, models []string) string {
 	out := cmd.ErrOrStderr()
-	fmt.Fprintf(out, "stale-results: results files hold %d model(s) outside the configured models:\n  %s\n",
+	outf(out, "stale-results: results files hold %d model(s) outside the configured models:\n  %s\n",
 		len(models), strings.Join(models, ", "))
-	fmt.Fprint(out, "Keep them on disk or drop them? [keep/drop] (default keep): ")
+	outp(out, "Keep them on disk or drop them? [keep/drop] (default keep): ")
 	line, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
 	if s := strings.TrimSpace(strings.ToLower(line)); s == "drop" || s == "d" {
 		return "drop"

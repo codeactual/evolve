@@ -149,7 +149,8 @@ func runSub(cmd, sub *cobra.Command, failures *bool) error {
 // refine the initial selection. withChecksReport adds `run all`'s static-checks step
 // before and report step after.
 func uiRun(cmd *cobra.Command, sweep *SweepFlags, def plan.Tiers,
-	triggerRuns int, evalFilter, failMsg string, withChecksReport bool) error {
+	triggerRuns int, evalFilter, failMsg string, withChecksReport bool,
+) error {
 	var failures bool
 	if withChecksReport {
 		if err := runSub(cmd, checksCmd, &failures); err != nil {

@@ -32,9 +32,9 @@ func TestAnthropicListerPaginates(t *testing.T) {
 		}
 		switch r.URL.Query().Get("after_id") {
 		case "":
-			fmt.Fprint(w, `{"data":[{"id":"claude-sonnet-5","display_name":"Claude Sonnet 5"}],"has_more":true,"last_id":"claude-sonnet-5"}`)
+			_, _ = fmt.Fprint(w, `{"data":[{"id":"claude-sonnet-5","display_name":"Claude Sonnet 5"}],"has_more":true,"last_id":"claude-sonnet-5"}`)
 		case "claude-sonnet-5":
-			fmt.Fprint(w, `{"data":[{"id":"claude-opus-4-8","display_name":"Claude Opus 4.8"}],"has_more":false}`)
+			_, _ = fmt.Fprint(w, `{"data":[{"id":"claude-opus-4-8","display_name":"Claude Opus 4.8"}],"has_more":false}`)
 		default:
 			t.Errorf("unexpected after_id %q", r.URL.Query().Get("after_id"))
 		}
@@ -76,7 +76,7 @@ func TestOpenAILister(t *testing.T) {
 		if got := r.Header.Get("authorization"); got != "Bearer k" {
 			t.Errorf("authorization = %q, want Bearer k", got)
 		}
-		fmt.Fprint(w, `{"data":[{"id":"gpt-5.5"},{"id":"gpt-5.4-mini"}]}`)
+		_, _ = fmt.Fprint(w, `{"data":[{"id":"gpt-5.5"},{"id":"gpt-5.4-mini"}]}`)
 	}))
 	defer srv.Close()
 

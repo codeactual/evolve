@@ -34,13 +34,13 @@ var doctorCmd = &cobra.Command{
 			return err
 		}
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "HARNESS\tCLI\tCREDENTIAL")
+		outln(w, "HARNESS\tCLI\tCREDENTIAL")
 		for _, h := range harnesses {
 			cliPath := "missing (" + h.CLI()[0] + ")"
 			if path, ok := harness.Available(h); ok {
 				cliPath = path
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", h.ID(), cliPath, credentialStatus(h.EnvKeys()))
+			outf(w, "%s\t%s\t%s\n", h.ID(), cliPath, credentialStatus(h.EnvKeys()))
 		}
 		if err := w.Flush(); err != nil {
 			return err
@@ -53,18 +53,18 @@ var doctorCmd = &cobra.Command{
 		offered := run.ProbeOfferedModels(cmd.Context(), &runner.Exec{}, harnesses,
 			offeredModelsProbeTimeout)
 		wm := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-		fmt.Fprintln(wm, "\nHARNESS\tOFFERED MODELS")
+		outln(wm, "\nHARNESS\tOFFERED MODELS")
 		for _, h := range harnesses {
-			fmt.Fprintf(wm, "%s\t%s\n", h.ID(), offeredStatus(h, offered))
+			outf(wm, "%s\t%s\n", h.ID(), offeredStatus(h, offered))
 		}
 		if err := wm.Flush(); err != nil {
 			return err
 		}
 
 		w2 := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-		fmt.Fprintln(w2, "\nPROVIDER\tTOKEN COUNTING")
+		outln(w2, "\nPROVIDER\tTOKEN COUNTING")
 		for _, p := range model.Providers() {
-			fmt.Fprintf(w2, "%s\t%s\n", p.ID, probeCounting(cmd.Context(), p.ID))
+			outf(w2, "%s\t%s\n", p.ID, probeCounting(cmd.Context(), p.ID))
 		}
 		if err := w2.Flush(); err != nil {
 			return err
@@ -75,12 +75,12 @@ var doctorCmd = &cobra.Command{
 			return err
 		}
 		for _, msg := range warnings {
-			fmt.Fprintf(cmd.OutOrStdout(), "WARN: %s\n", msg)
+			outf(cmd.OutOrStdout(), "WARN: %s\n", msg)
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "\nLLM judge: %s\n", judgeStatus())
+		outf(cmd.OutOrStdout(), "\nLLM judge: %s\n", judgeStatus())
 
-		fmt.Fprintf(cmd.OutOrStdout(), "\nVersion pin: %s\n", versionPinStatus())
+		outf(cmd.OutOrStdout(), "\nVersion pin: %s\n", versionPinStatus())
 		return nil
 	},
 }

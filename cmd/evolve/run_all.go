@@ -4,8 +4,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
@@ -53,7 +51,7 @@ var runAllCmd = &cobra.Command{
 			return err
 		}
 		if !allFlags.CountOnly {
-			fmt.Fprintf(cmd.OutOrStdout(), "parallelism: %d concurrent agent runs\n", allFlags.Jobs)
+			outf(cmd.OutOrStdout(), "parallelism: %d concurrent agent runs\n", allFlags.Jobs)
 		}
 		triggerTO, evalTO := perTierTimeouts(cmd, allFlags.Timeout)
 		failed, runErr := run.Sweep(cmd.Context(), run.SweepOptions{

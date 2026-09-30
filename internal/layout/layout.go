@@ -16,6 +16,8 @@ import (
 // Kind names one of the supported repository shapes.
 type Kind string
 
+// The repository shapes Detect recognizes; Auto asks it to infer the shape from
+// markers.
 const (
 	Auto        Kind = ""            // detect from markers
 	Marketplace Kind = "marketplace" // marketplace manifest + plugins/ tree

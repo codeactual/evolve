@@ -33,8 +33,10 @@ func sample() *File {
 			Estimate: &Estimate{InputTokens: 1385, InputCostUSD: new(0.01385)},
 			SpecHash: "triggerspechash",
 		}},
-		Summary: TriggerSummary{Passed: &npassed, Total: 1, AvgRunSeconds: &avg,
-			Estimate: &Estimate{InputTokens: 1385, InputCostUSD: new(0.01385)}},
+		Summary: TriggerSummary{
+			Passed: &npassed, Total: 1, AvgRunSeconds: &avg,
+			Estimate: &Estimate{InputTokens: 1385, InputCostUSD: new(0.01385)},
+		},
 	})
 	// An entry with no published pricing and no estimates.
 	chits, cruns, cpassed := 2, 3, true
@@ -148,11 +150,10 @@ func TestLoadToleratesGarbage(t *testing.T) {
 	}
 
 	bad := t.TempDir()
-	os.WriteFile(filepath.Join(bad, "results.json"), []byte("{corrupt"), 0o644)
+	mustWriteFile(t, filepath.Join(bad, "results.json"), []byte("{corrupt"), 0o644)
 	if f, _, _ := LoadDir(bad, "p", "s"); len(f.Models) != 0 {
 		t.Error("corrupt file must load fresh")
 	}
-
 }
 
 // TestLoadRefusesNewerSchema pins the forward-only guarantee: a file written by
@@ -245,8 +246,10 @@ func TestGradedAssertionFlattens(t *testing.T) {
 	f := &File{Schema: Schema, Plugin: "p", Skill: "s"}
 	exit := 0
 	graded := []GradedAssertion{{
-		Assertion: evalspec.Assertion{Type: "command", Run: "go test ./...", Requires: "go", ExpectExit: &exit,
-			Text: "authored text must not double-emit"},
+		Assertion: evalspec.Assertion{
+			Type: "command", Run: "go test ./...", Requires: "go", ExpectExit: &exit,
+			Text: "authored text must not double-emit",
+		},
 		Text:   "command `go test ./...` exits 0",
 		Passed: nil, Evidence: "skipped: go not installed",
 		Source: "assertion",
@@ -360,5 +363,13 @@ func TestEstimateHelpers(t *testing.T) {
 	}
 	if SumEstimates([]*Estimate{nil, nil}) != nil {
 		t.Error("all-nil must sum to nil")
+	}
+}
+
+// mustWriteFile writes fixture data, failing the test on error.
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatal(err)
 	}
 }

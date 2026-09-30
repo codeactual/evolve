@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 
 	"github.com/codeactual/evolve/internal/encfmt"
@@ -212,12 +213,7 @@ func (th Thresholds) gated(m Maturity) bool {
 	if m == MaturityUnknown {
 		return false
 	}
-	for _, g := range th.Maturity {
-		if g == m {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(th.Maturity, m)
 }
 
 // Check returns the gate's breaches, split per plugin by that plugin's own

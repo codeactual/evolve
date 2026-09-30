@@ -22,17 +22,17 @@ type DiscoveredModel struct {
 	Name string
 }
 
-// ModelLister enumerates the models a vendor currently serves. Like counting,
+// Lister enumerates the models a vendor currently serves. Like counting,
 // listing is a vendor concern keyed by provider id (see ListerFor): the same
 // registry entry stays valid regardless of which harness drives the model.
-type ModelLister interface {
+type Lister interface {
 	ListModels(ctx context.Context) ([]DiscoveredModel, error)
 }
 
 // ListerFor returns the model-listing client for a provider id, or (nil, false)
 // for a vendor with no listing API. Credentials are the same env vars
 // the vendor's counting API reads (CounterEnvKeys).
-func ListerFor(providerID string) (ModelLister, bool) {
+func ListerFor(providerID string) (Lister, bool) {
 	switch providerID {
 	case ProviderAnthropic:
 		return anthropicLister{
@@ -136,7 +136,7 @@ func getJSON(ctx context.Context, client *http.Client, endpoint string, headers 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // best-effort: the response was fully read or abandoned
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		tail, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
 		return fmt.Errorf("HTTP %s: %s", resp.Status, strings.TrimSpace(string(tail)))

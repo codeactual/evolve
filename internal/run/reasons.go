@@ -21,6 +21,8 @@ import (
 // ReasonNone.
 type SelectReason int
 
+// The reasons a (case, model) is selected, from none through the aggregate
+// ReasonNoData.
 const (
 	ReasonNone                SelectReason = iota // complete; not selected
 	ReasonNew                                     // no stored result for this model
@@ -164,13 +166,13 @@ func evalCaseReason(r results.EvalResult, ok bool,
 func aggregateReasons(perModel []SelectReason) string {
 	var distinct []SelectReason
 	seen := map[SelectReason]bool{}
-	any, allNew := false, true
+	needed, allNew := false, true
 	for _, r := range perModel {
 		if r == ReasonNone {
 			allNew = false
 			continue
 		}
-		any = true
+		needed = true
 		if r != ReasonNew {
 			allNew = false
 		}
@@ -179,7 +181,7 @@ func aggregateReasons(perModel []SelectReason) string {
 			distinct = append(distinct, r)
 		}
 	}
-	if !any {
+	if !needed {
 		return ""
 	}
 	if allNew {

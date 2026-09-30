@@ -158,10 +158,14 @@ func TestClaudeRuntimeError(t *testing.T) {
 		{"plain text clean exit", "hello\n", 0, ""},
 		{"plain text crash", "boom\n", 1, "unparseable CLI output"},
 		{"max turns empty result", claudeStreamMaxTurns, 1, "claude run error (error_max_turns): hit max turns"},
-		{"rejected event, zero output tokens", claudeStreamRateLimited, 0,
-			"usage limit reached (five_hour), resets " + resets},
-		{"limit banner without event", claudeStreamLimitBanner, 0,
-			"usage limit reached: Claude AI usage limit reached|1755772800"},
+		{
+			"rejected event, zero output tokens", claudeStreamRateLimited, 0,
+			"usage limit reached (five_hour), resets " + resets,
+		},
+		{
+			"limit banner without event", claudeStreamLimitBanner, 0,
+			"usage limit reached: Claude AI usage limit reached|1755772800",
+		},
 		{"allowed event with real result", claudeStreamLimitAllowed, 0, ""},
 		{"rejected mid-run with real output", claudeStreamLimitMidRun, 0, ""},
 	}

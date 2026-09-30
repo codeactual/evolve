@@ -17,6 +17,7 @@ import (
 // Kind, an entry in All, a fileName case, and a start case — nothing else.
 type Kind string
 
+// The available profiles.
 const (
 	CPU    Kind = "cpu"
 	Memory Kind = "memory"

@@ -92,6 +92,7 @@ func seedClaudeState(dir string) {
 	}
 }
 
+// TriggerSpec builds the headless `claude -p` command for one trigger query.
 func (c *Claude) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) model.CommandSpec {
 	argv := []string{
 		"claude", "-p", query,
@@ -164,7 +165,7 @@ type claudeEvent struct {
 // mid-session, so last is authoritative; nil when none appeared).
 // ParseEvalOutput, ParseToolCalls, and RuntimeError each project from it.
 func scanEvents(stdout []byte) (result claudeEvent, found bool, tools []model.ToolCall, rateLimit *claudeRateLimit) {
-	for _, line := range bytes.Split(stdout, []byte{'\n'}) {
+	for line := range bytes.SplitSeq(stdout, []byte{'\n'}) {
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
@@ -281,7 +282,7 @@ func (c *Claude) ReportsUsage() bool { return true }
 // success-shaped result (exit 0, the limit banner as the result text, zero
 // output tokens), so without the carve-out rate-limited runs would be silently
 // graded into all-fail rows.
-func (c *Claude) RuntimeError(stdout []byte, exitCode int, timedOut bool) string {
+func (c *Claude) RuntimeError(stdout []byte, exitCode int, _ bool) string {
 	if len(bytes.TrimSpace(stdout)) == 0 {
 		return "empty CLI output"
 	}
@@ -354,15 +355,13 @@ func (c *Claude) ListOfferedModels(ctx context.Context, probe ProbeExec) ([]stri
 	names := make([]string, len(aliases))
 	var wg sync.WaitGroup
 	for i, alias := range aliases {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			out, err := probe(ctx, claudeProbeSpec(alias), nil)
 			if err != nil {
 				return
 			}
 			names[i] = parseClaudeCurrentModel(out)
-		}()
+		})
 	}
 	wg.Wait()
 

@@ -131,7 +131,6 @@ func runTriggerSet(ctx context.Context, opts TriggerOptions, set layout.EvalSet)
 func runTriggerUnit(ctx context.Context, opts TriggerOptions, set layout.EvalSet, sel harness.Selection,
 	file *results.File, skillMD []byte, contentHash string, triggers []evalspec.Trigger, allowedModels []string, ws string,
 ) (failed bool, err error) {
-
 	rep := opts.reporter()
 	// modelApplicable is every query valid for this model (the eval-set models
 	// restriction + skill only), ignoring the selection filter, so a partial rerun
@@ -229,8 +228,8 @@ func runTriggerUnit(ctx context.Context, opts TriggerOptions, set layout.EvalSet
 // fills hits/runs/passed/avg into entryResults as queries complete. Sharing
 // the workspace is safe: trigger sessions are read-only.
 func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection, cli, ws string, ref plan.UnitRef,
-	triggers []evalspec.Trigger, entryResults []results.TriggerResult) (bool, error) {
-
+	triggers []evalspec.Trigger, entryResults []results.TriggerResult,
+) (bool, error) {
 	rep := opts.reporter()
 	skill := ref.Skill
 	type outcome struct {
@@ -340,7 +339,8 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 }
 
 func buildTriggerEntry(opts TriggerOptions, sel harness.Selection, executed bool,
-	contentHash string, entryResults []results.TriggerResult, old *results.TriggerEntry) *results.TriggerEntry {
+	contentHash string, entryResults []results.TriggerResult, old *results.TriggerEntry,
+) *results.TriggerEntry {
 	header := opts.header(sel, executed)
 	header.ContentHash = contentHash
 	entry := &results.TriggerEntry{
@@ -398,8 +398,8 @@ func buildTriggerEntry(opts TriggerOptions, sel harness.Selection, executed bool
 // preserves queries the rerun did not touch, updates the ones it did, and prunes
 // queries removed from the spec (absent from modelApplicable).
 func mergeTriggerResults(existing *results.TriggerEntry, fresh []results.TriggerResult,
-	modelApplicable []evalspec.Trigger) []results.TriggerResult {
-
+	modelApplicable []evalspec.Trigger,
+) []results.TriggerResult {
 	freshByQuery := make(map[string]results.TriggerResult, len(fresh))
 	for _, r := range fresh {
 		freshByQuery[r.Query] = r

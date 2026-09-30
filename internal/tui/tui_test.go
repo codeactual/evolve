@@ -23,7 +23,7 @@ func (fakeProv) CLI() []string                                  { return []strin
 func (fakeProv) EnvKeys() []string                              { return []string{"K"} }
 func (fakeProv) SkillDirs() []string                            { return []string{".fake/skills"} }
 func (fakeProv) ScanLine([]byte, string, string) (bool, string) { return false, "" }
-func (fakeProv) TriggerSpec(ws, query, cliModelID string, _ bool) model.CommandSpec {
+func (fakeProv) TriggerSpec(ws, _, _ string, _ bool) model.CommandSpec {
 	return model.CommandSpec{Argv: []string{"x"}, Dir: ws}
 }
 

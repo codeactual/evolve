@@ -260,7 +260,8 @@ func judgeBatch(ctx context.Context, llm []evalspec.Assertion, opts Options) []V
 	ctx, span := tracer().Start(ctx, "evolve.grade.assertion",
 		trace.WithAttributes(
 			attribute.String("assertion_type", "llm"),
-			attribute.Int("assertion_count", len(llm))))
+			attribute.Int("assertion_count", len(llm)),
+		))
 	defer span.End()
 	verdicts := judgeBatchVerdicts(ctx, llm, opts)
 	for i, v := range verdicts {

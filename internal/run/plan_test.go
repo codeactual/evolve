@@ -282,7 +282,7 @@ func TestNeedsModifiedSelectsChangedContent(t *testing.T) {
 	// Flip q1's should_trigger (same query key, changed definition): --modified
 	// reselects it with reason "modified".
 	tpath := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
-	os.WriteFile(tpath, []byte(`{"triggers": [
+	mustWriteFile(t, tpath, []byte(`{"triggers": [
 		{"query": "q1", "should_trigger": false},
 		{"query": "q2", "should_trigger": false}
 	]}`), 0o644)
@@ -300,11 +300,11 @@ func TestNeedsModifiedSelectsChangedContent(t *testing.T) {
 
 	// Restore the spec and instead edit the SKILL.md frontmatter: --modified
 	// reselects on the content-hash change even though the spec is unchanged.
-	os.WriteFile(tpath, []byte(`{"triggers": [
+	mustWriteFile(t, tpath, []byte(`{"triggers": [
 		{"query": "q1", "should_trigger": true},
 		{"query": "q2", "should_trigger": false}
 	]}`), 0o644)
-	os.WriteFile(filepath.Join(repo.Root, "skills", "solo-skill", "SKILL.md"),
+	mustWriteFile(t, filepath.Join(repo.Root, "skills", "solo-skill", "SKILL.md"),
 		[]byte("---\ntitle: Solo Skill\ndescription: Does a DIFFERENT thing.\n---\nbody\n"), 0o644)
 	cat, err = Catalog(topts.Options)
 	if err != nil {
@@ -343,7 +343,7 @@ func TestNeedsFailedSelectsFailures(t *testing.T) {
 	// Rewrite the spec to a single failing query, re-run, then --failed selects it
 	// with reason "not passing (failed)".
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
-	os.WriteFile(path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
+	mustWriteFile(t, path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
 	if _, err := Triggers(context.Background(), topts); err != nil {
 		t.Fatal(err)
 	}

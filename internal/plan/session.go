@@ -4,6 +4,8 @@
 package plan
 
 import (
+	"maps"
+
 	"github.com/codeactual/evolve/internal/harness"
 	"github.com/codeactual/evolve/internal/model"
 )
@@ -57,6 +59,8 @@ type HarnessState struct {
 // it can show "queued for all / some / none" without re-deriving the plan.
 type NodeSel int
 
+// NodeSel values: the two forced (dirty) overrides, then the auto-derived queue
+// states.
 const (
 	SelForceOff    NodeSel = iota // user forced off (dirty)
 	SelForceOn                    // user forced on (dirty) — runs for every enabled model
@@ -383,9 +387,7 @@ func (s *Session) selection() Selection {
 		Cases:  map[CaseRef]State{},
 		Needs:  map[string]map[CaseRef]bool{},
 	}
-	for cr, st := range s.cases {
-		sel.Cases[cr] = st
-	}
+	maps.Copy(sel.Cases, s.cases)
 	for _, mk := range s.enabledModelKeys() {
 		need := map[CaseRef]bool{}
 		for cr := range s.reasons[mk] {

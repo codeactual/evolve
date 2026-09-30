@@ -681,9 +681,9 @@ func retainArtifacts(parent, ws string, stdout []byte) (workdir, logPath string)
 // fatal message sits at the end, so keep the tail and collapse newlines.
 func errorDetail(reason, stderrTail string) string {
 	tail := strings.ReplaceAll(strings.TrimSpace(stderrTail), "\n", " ")
-	const max = 200
-	if len(tail) > max {
-		tail = "…" + tail[len(tail)-max:]
+	const maxTail = 200
+	if len(tail) > maxTail {
+		tail = "…" + tail[len(tail)-maxTail:]
 	}
 	switch {
 	case reason != "" && tail != "":

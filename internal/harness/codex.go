@@ -83,6 +83,7 @@ func seedCodexConfig(srcHome, home string) {
 	}
 }
 
+// TriggerSpec builds the headless `codex exec` command for one trigger query.
 func (c *Codex) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) model.CommandSpec {
 	argv := []string{"codex", "exec", query, "--json", "--skip-git-repo-check", "-m", cliModelID}
 	if hostSandboxed {
@@ -99,6 +100,7 @@ func (c *Codex) ScanLine(line []byte, skill, _ string) (bool, string) {
 	return strings.Contains(string(line), "skills/"+skill+"/SKILL.md"), ""
 }
 
+// EvalSpec builds the headless `codex exec` command for one behavioral eval.
 func (c *Codex) EvalSpec(ws string, in model.EvalInput, cliModelID string) model.CommandSpec {
 	// codex applies its own macOS Seatbelt sandbox for read-only/workspace-write,
 	// which cannot nest inside evolve's. When evolve already confines the run,
@@ -298,7 +300,7 @@ func (c *Codex) ReportsUsage() bool { return true }
 // RuntimeError detects a codex run that produced no agent output (auth blocked,
 // crash) so it is reported distinctly from a failed eval. A run that emitted any
 // agent_message event is gradable, regardless of exit code.
-func (c *Codex) RuntimeError(stdout []byte, exitCode int, timedOut bool) string {
+func (c *Codex) RuntimeError(stdout []byte, exitCode int, _ bool) string {
 	if len(bytes.TrimSpace(stdout)) == 0 {
 		return "empty CLI output"
 	}

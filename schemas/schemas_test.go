@@ -211,8 +211,10 @@ func maximalResults() *results.File {
 				AvgRunSeconds: new(40.0),
 			},
 			Results: []results.EvalResult{
-				{ID: "1", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
-					Timing: &results.Timing{ExecutorDurationSeconds: new(40.0)}, Fingerprint: "fp-1"},
+				{
+					ID: "1", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
+					Timing: &results.Timing{ExecutorDurationSeconds: new(40.0)}, Fingerprint: "fp-1",
+				},
 			},
 		},
 		Previous: &results.EvalSnapshot{
@@ -223,9 +225,11 @@ func maximalResults() *results.File {
 				Measured:      &results.Measured{InputTokens: new(90), OutputTokens: new(8), CostUSD: new(0.0002)},
 			},
 			Results: []results.EvalResult{
-				{ID: "1", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
+				{
+					ID: "1", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
 					Timing:   &results.Timing{ExecutorDurationSeconds: new(170.0)},
-					Measured: &results.Measured{InputTokens: new(90), OutputTokens: new(8), CostUSD: new(0.0002)}},
+					Measured: &results.Measured{InputTokens: new(90), OutputTokens: new(8), CostUSD: new(0.0002)},
+				},
 			},
 		},
 	})

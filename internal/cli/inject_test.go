@@ -58,13 +58,13 @@ func TestInjectModelsCreatesConfigAndSeedsBuiltins(t *testing.T) {
 	// keep every builtin Anthropic model alongside the new one.
 	models := reload(t, dir)
 	for _, want := range []string{"anthropic/claude-sonnet-6", "anthropic/claude-sonnet-4-6", "anthropic/claude-opus-4-8", "anthropic/claude-fable-5"} {
-		if _, ok := model.ModelByID(models, want); !ok {
+		if _, ok := model.ByID(models, want); !ok {
 			t.Errorf("effective registry missing %s after injection", want)
 		}
 	}
 	// The seeded Sonnet 4.6 entry must keep its non-default display name and
 	// pricing through the round trip.
-	m, _ := model.ModelByID(models, "anthropic/claude-sonnet-4-6")
+	m, _ := model.ByID(models, "anthropic/claude-sonnet-4-6")
 	if m.Name != "Claude Sonnet 4.6" {
 		t.Errorf("seeded sonnet-4-6 lost its display name: %q", m.Name)
 	}
@@ -72,7 +72,7 @@ func TestInjectModelsCreatesConfigAndSeedsBuiltins(t *testing.T) {
 		t.Errorf("seeded sonnet-4-6 lost its pricing: %v/%v", m.InputUSD, m.OutputUSD)
 	}
 	// Other providers stay builtin: no stray override was written for them.
-	if _, ok := model.ModelByID(models, "openai/gpt-5.5"); !ok {
+	if _, ok := model.ByID(models, "openai/gpt-5.5"); !ok {
 		t.Error("non-injected providers must keep their builtin models")
 	}
 }
@@ -106,7 +106,7 @@ func TestInjectModelsAppendsWithoutSeedWhenListExists(t *testing.T) {
 		t.Errorf("existing list must not be re-seeded with builtins:\n%s", text)
 	}
 	models := reload(t, dir)
-	if _, ok := model.ModelByID(models, "anthropic/claude-sonnet-6"); !ok {
+	if _, ok := model.ByID(models, "anthropic/claude-sonnet-6"); !ok {
 		t.Error("injected model missing from the effective registry")
 	}
 }
@@ -138,7 +138,7 @@ func TestInjectModelsMultipleProviders(t *testing.T) {
 	}
 	models := reload(t, dir)
 	for _, want := range []string{"anthropic/claude-sonnet-6", "openai/gpt-6", "openai/gpt-5.5"} {
-		if _, ok := model.ModelByID(models, want); !ok {
+		if _, ok := model.ByID(models, want); !ok {
 			t.Errorf("effective registry missing %s", want)
 		}
 	}
@@ -152,7 +152,7 @@ func TestEntryForDropsDefaults(t *testing.T) {
 
 	// A builtin Codex model: the native supported map and preferred harness are
 	// defaults, but the display name and pricing are kept.
-	gpt55, _ := model.ModelByID(model.AllModels(nil), "openai/gpt-5.5")
+	gpt55, _ := model.ByID(model.AllModels(nil), "openai/gpt-5.5")
 	e = entryFor(gpt55)
 	if e.Supported != nil || e.Preferred != "" {
 		t.Errorf("native supported/preferred must be omitted, got %+v", e)

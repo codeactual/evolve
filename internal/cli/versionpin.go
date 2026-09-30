@@ -40,7 +40,8 @@ func (o *Options) CheckVersionPin(binary string, w io.Writer) error {
 	}
 	v, err := goversion.NewVersion(binary)
 	if err != nil || v.Prerelease() != "" {
-		fmt.Fprintf(w, "warn: evolve %s is not a release build; skipping the repository version pin %q\n",
+		// A failed warning write is not actionable; the pin check passes either way.
+		_, _ = fmt.Fprintf(w, "warn: evolve %s is not a release build; skipping the repository version pin %q\n",
 			binary, pin)
 		return nil
 	}

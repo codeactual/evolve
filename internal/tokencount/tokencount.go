@@ -130,7 +130,8 @@ func (c *Counter) warn(scope, message string) {
 	defer c.mu.Unlock()
 	if !c.warned[scope] {
 		c.warned[scope] = true
-		fmt.Fprintf(c.stderr, "  warn: [%s] %s\n", scope, message)
+		// A failed warning write is not actionable; counting carries on without it.
+		_, _ = fmt.Fprintf(c.stderr, "  warn: [%s] %s\n", scope, message)
 	}
 }
 

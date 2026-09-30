@@ -59,7 +59,8 @@ func MigrateFile(dir, plugin, skill, format string) (onDisk int, upgraded bool, 
 			path, probe.Schema, ErrSchemaTooNew, Schema)
 	default:
 		return probe.Schema, false, fmt.Errorf(
-			"%s is schema %d, which this evolve cannot migrate (current schema %d)", path, probe.Schema, Schema)
+			"%s is schema %d, which this evolve cannot migrate (current schema %d)", path, probe.Schema, Schema,
+		)
 	}
 }
 

@@ -139,8 +139,8 @@ func AllModels(overrides map[string][]Model) []Model {
 	return out
 }
 
-// ModelByID returns the model with the given canonical id from models, if any.
-func ModelByID(models []Model, id string) (Model, bool) {
+// ByID returns the model with the given canonical id from models, if any.
+func ByID(models []Model, id string) (Model, bool) {
 	for _, m := range models {
 		if m.ID == id {
 			return m, true

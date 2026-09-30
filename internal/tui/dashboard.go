@@ -246,7 +246,8 @@ type dashboardModel struct {
 // from what the engine runs). cat supplies the authored specs the Details pane
 // shows; prior seeds the delta basis.
 func newDashboard(p plan.Plan, cat []plan.SkillCatalog, prior plan.PriorMetrics,
-	thresholds Thresholds) dashboardModel {
+	thresholds Thresholds,
+) dashboardModel {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 

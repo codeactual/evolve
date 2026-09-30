@@ -44,7 +44,7 @@ func TestBuiltinInvariants(t *testing.T) {
 // TestKeyStability pins the results-key bytes for a vendor-native model so the
 // harness split cannot orphan committed results.
 func TestKeyStability(t *testing.T) {
-	m, ok := ModelByID(builtins(), "anthropic/claude-sonnet-4-6")
+	m, ok := ByID(builtins(), "anthropic/claude-sonnet-4-6")
 	if !ok {
 		t.Fatal("anthropic/claude-sonnet-4-6 missing from registry")
 	}
@@ -71,7 +71,7 @@ func TestGPT56Models(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			m, ok := ModelByID(builtins(), tc.id)
+			m, ok := ByID(builtins(), tc.id)
 			if !ok {
 				t.Fatalf("%s missing from registry", tc.id)
 			}
@@ -122,13 +122,13 @@ func TestAllModelsOverride(t *testing.T) {
 		}},
 	}
 	got := AllModels(override)
-	if _, ok := ModelByID(got, "openai/gpt-5.5"); ok {
+	if _, ok := ByID(got, "openai/gpt-5.5"); ok {
 		t.Error("builtin openai/gpt-5.5 should be replaced by the override")
 	}
-	if _, ok := ModelByID(got, "openai/gpt-6"); !ok {
+	if _, ok := ByID(got, "openai/gpt-6"); !ok {
 		t.Error("override openai/gpt-6 missing")
 	}
-	if _, ok := ModelByID(got, "anthropic/claude-sonnet-4-6"); !ok {
+	if _, ok := ByID(got, "anthropic/claude-sonnet-4-6"); !ok {
 		t.Error("non-overridden anthropic models should remain")
 	}
 }

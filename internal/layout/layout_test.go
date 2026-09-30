@@ -131,7 +131,7 @@ func TestEvalSetsMultiFormat(t *testing.T) {
 	write := func(rel, content string) {
 		t.Helper()
 		path := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		mustMkdirAll(t, filepath.Dir(path), 0o755)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -166,4 +166,12 @@ func equal(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// mustMkdirAll creates a fixture directory tree, failing the test on error.
+func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatal(err)
+	}
 }

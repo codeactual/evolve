@@ -29,7 +29,7 @@ func fixtureRepo(t *testing.T) *layout.Repo {
 	write := func(rel, content string) {
 		t.Helper()
 		path := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		mustMkdirAll(t, filepath.Dir(path), 0o755)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -146,9 +146,11 @@ func fixtureRepo(t *testing.T) *layout.Repo {
 				Measured:      &results.Measured{InputTokens: new(8000), OutputTokens: new(3000), CostUSD: new(0.75)},
 			},
 			Results: []results.EvalResult{
-				{ID: "basic", Passed: new(true), Summary: &results.GradeSummary{PassRate: new(1.0)},
+				{
+					ID: "basic", Passed: new(true), Summary: &results.GradeSummary{PassRate: new(1.0)},
 					Timing:   &results.Timing{ExecutorDurationSeconds: new(80.0)},
-					Measured: &results.Measured{InputTokens: new(8000), OutputTokens: new(3000), CostUSD: new(0.75)}},
+					Measured: &results.Measured{InputTokens: new(8000), OutputTokens: new(3000), CostUSD: new(0.75)},
+				},
 			},
 		},
 		Baseline: &results.EvalSnapshot{
@@ -158,8 +160,10 @@ func fixtureRepo(t *testing.T) *layout.Repo {
 				AvgRunSeconds: new(40.0),
 			},
 			Results: []results.EvalResult{
-				{ID: "basic", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
-					Timing: &results.Timing{ExecutorDurationSeconds: new(40.0)}, Fingerprint: "fp-basic"},
+				{
+					ID: "basic", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
+					Timing: &results.Timing{ExecutorDurationSeconds: new(40.0)}, Fingerprint: "fp-basic",
+				},
 			},
 		},
 	})
@@ -194,7 +198,7 @@ func TestGenerateGolden(t *testing.T) {
 		}
 		goldenPath := filepath.Join("..", "..", "e2e", "golden", golden)
 		if *update {
-			os.MkdirAll(filepath.Dir(goldenPath), 0o755)
+			mustMkdirAll(t, filepath.Dir(goldenPath), 0o755)
 			if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -802,7 +806,7 @@ func multiSkillRepo(t *testing.T) *layout.Repo {
 	write := func(rel, content string) {
 		t.Helper()
 		path := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		mustMkdirAll(t, filepath.Dir(path), 0o755)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -953,5 +957,13 @@ func TestGenerateRefusesNewerResults(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(repo.Root, "EVALUATION.md")); !os.IsNotExist(statErr) {
 		t.Error("EVALUATION.md must not be written when a results file is newer")
+	}
+}
+
+// mustMkdirAll creates a fixture directory tree, failing the test on error.
+func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatal(err)
 	}
 }

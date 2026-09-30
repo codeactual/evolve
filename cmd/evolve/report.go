@@ -68,7 +68,7 @@ var reportCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "report: regenerated EVALUATION.md and %s (%d plugins)\n",
+		outf(cmd.OutOrStdout(), "report: regenerated EVALUATION.md and %s (%d plugins)\n",
 			report.SummaryName(opts.ResultsFormat), len(summary.Plugins))
 
 		if !reportFlags.Check {
@@ -92,16 +92,16 @@ var reportCmd = &cobra.Command{
 		}
 		fails, warns := report.Check(repo, summary, th, active)
 		for _, warn := range warns {
-			fmt.Fprintf(cmd.ErrOrStderr(), "WARN: %s\n", warn)
+			outf(cmd.ErrOrStderr(), "WARN: %s\n", warn)
 		}
 		for _, fail := range fails {
-			fmt.Fprintf(cmd.ErrOrStderr(), "FAIL: %s\n", fail)
+			outf(cmd.ErrOrStderr(), "FAIL: %s\n", fail)
 		}
 		if len(fails) > 0 {
 			return fmt.Errorf("report: %d threshold %s: %w",
 				len(fails), plural(len(fails), "breach", "breaches"), cli.ErrFailures)
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "report: thresholds met")
+		outln(cmd.OutOrStdout(), "report: thresholds met")
 		return nil
 	},
 }
@@ -117,14 +117,14 @@ func runMigrate(cmd *cobra.Command) error {
 	}
 	out := cmd.OutOrStdout()
 	if len(upgraded) == 0 {
-		fmt.Fprintf(out, "migrate: results files already at schema %d\n", results.Schema)
+		outf(out, "migrate: results files already at schema %d\n", results.Schema)
 		return nil
 	}
 	for _, m := range upgraded {
-		fmt.Fprintf(out, "migrate: upgraded %s/%s from schema %d to %d\n",
+		outf(out, "migrate: upgraded %s/%s from schema %d to %d\n",
 			m.Plugin, m.Skill, m.FromSchema, results.Schema)
 	}
-	fmt.Fprintf(out, "migrate: upgraded %d results %s to schema %d\n",
+	outf(out, "migrate: upgraded %d results %s to schema %d\n",
 		len(upgraded), plural(len(upgraded), "file", "files"), results.Schema)
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -74,7 +75,8 @@ type fakeProbeRunner struct {
 }
 
 func (f *fakeProbeRunner) Run(_ context.Context, spec model.CommandSpec, _ time.Duration,
-	scan *runner.Scan) (runner.Result, error) {
+	scan *runner.Scan,
+) (runner.Result, error) {
 	f.spec = spec
 	if scan == nil {
 		return runner.Result{Stdout: []byte(joinLines(f.lines))}, nil
@@ -88,11 +90,11 @@ func (f *fakeProbeRunner) Run(_ context.Context, spec model.CommandSpec, _ time.
 }
 
 func joinLines(lines []string) string {
-	out := ""
+	var out strings.Builder
 	for _, l := range lines {
-		out += l + "\n"
+		out.WriteString(l + "\n")
 	}
-	return out
+	return out.String()
 }
 
 func TestProbeExecResolvesCLIAndStopsEarly(t *testing.T) {

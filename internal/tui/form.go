@@ -635,7 +635,8 @@ func (f formModel) buttons() string {
 func (f formModel) hint() string {
 	return footerHint.Render(clip(
 		"[tab] pane · [↑↓]/[jk] move · [←→]/[hl] fold · [space] toggle · [g]/[G] ends · [r] run · [esc] cancel",
-		max(f.w, 1)))
+		max(f.w, 1),
+	))
 }
 
 func (f formModel) modelCount() string {

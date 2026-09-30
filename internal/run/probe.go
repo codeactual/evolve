@@ -33,7 +33,8 @@ type probeRunner interface {
 // CLIs write their own operator-side state, which a workspace sandbox would
 // break) — pass a zero runner.Exec.
 func ProbeOfferedModels(ctx context.Context, r *runner.Exec, harnesses []harness.Harness,
-	timeout time.Duration) map[string][]string {
+	timeout time.Duration,
+) map[string][]string {
 	out := map[string][]string{}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -45,9 +46,7 @@ func ProbeOfferedModels(ctx context.Context, r *runner.Exec, harnesses []harness
 		if _, onPath := harness.Available(h); !onPath {
 			continue
 		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			offered, err := lister.ListOfferedModels(ctx, probeExec(r, h, timeout))
 			if err != nil || len(offered) == 0 {
 				slog.DebugContext(ctx, "offered-models probe yielded nothing",
@@ -57,7 +56,7 @@ func ProbeOfferedModels(ctx context.Context, r *runner.Exec, harnesses []harness
 			mu.Lock()
 			out[h.ID()] = offered
 			mu.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 	return out

@@ -42,6 +42,7 @@ func (f *fakeTriggerProvider) Name() string        { return "Fake" }
 func (f *fakeTriggerProvider) CLI() []string       { return []string{"sh"} } // always on PATH
 func (f *fakeTriggerProvider) EnvKeys() []string   { return []string{"FAKE_KEY"} }
 func (f *fakeTriggerProvider) SkillDirs() []string { return []string{filepath.Join(".fake", "skills")} }
+
 func (f *fakeTriggerProvider) canonicalModel() model.Model {
 	m := model.Model{
 		ID: "fake/model-1", ProviderID: "fake", Name: "Fake Model 1",
@@ -53,9 +54,11 @@ func (f *fakeTriggerProvider) canonicalModel() model.Model {
 	}
 	return m
 }
-func (f *fakeTriggerProvider) TriggerSpec(ws, query, cliModelID string, _ bool) model.CommandSpec {
+
+func (f *fakeTriggerProvider) TriggerSpec(ws, query, _ string, _ bool) model.CommandSpec {
 	return model.CommandSpec{Argv: []string{"fake-cli", query}, Dir: ws}
 }
+
 func (f *fakeTriggerProvider) ScanLine(line []byte, skill, _ string) (bool, string) {
 	return bytes.Contains(line, []byte("ACTIVATE:"+skill)), ""
 }
@@ -273,7 +276,7 @@ func TestTriggersDetectsFailures(t *testing.T) {
 	repo := triggerRepoFixture(t)
 	// Overwrite triggers: expect a trigger on a query the fake never triggers.
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
-	os.WriteFile(path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
+	mustWriteFile(t, path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
 
 	opts := triggerOptions(t, repo, &countingTriggerProvider{})
 	failed, err := Triggers(context.Background(), opts)
@@ -318,11 +321,13 @@ func TestTriggersNewRerunsAfterEvalChange(t *testing.T) {
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
 	data, _ := os.ReadFile(path)
 	var spec map[string]any
-	json.Unmarshal(data, &spec)
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
 	spec["triggers"] = append(spec["triggers"].([]any),
 		map[string]any{"query": "brand new please trigger", "should_trigger": true})
 	updated, _ := json.Marshal(spec)
-	os.WriteFile(path, updated, 0o644)
+	mustWriteFile(t, path, updated, 0o644)
 
 	var stdout bytes.Buffer
 	opts.Stdout = &stdout
@@ -343,7 +348,7 @@ func TestTriggersFailedRerunsFailingUnit(t *testing.T) {
 	repo := triggerRepoFixture(t)
 	// A query the fake never triggers though it should: the unit fails.
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
-	os.WriteFile(path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
+	mustWriteFile(t, path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
 
 	opts := triggerOptions(t, repo, &countingTriggerProvider{fakeTriggerProvider{priced: true}})
 	opts.Stdout = io.Discard
@@ -386,11 +391,13 @@ func TestTriggersFailedSkipsPassingIgnoresMissing(t *testing.T) {
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
 	data, _ := os.ReadFile(path)
 	var spec map[string]any
-	json.Unmarshal(data, &spec)
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
 	spec["triggers"] = append(spec["triggers"].([]any),
 		map[string]any{"query": "unrelated and new", "should_trigger": false})
 	updated, _ := json.Marshal(spec)
-	os.WriteFile(path, updated, 0o644)
+	mustWriteFile(t, path, updated, 0o644)
 
 	stdout.Reset()
 	if _, err := Triggers(context.Background(), opts); err != nil { // --failed only
@@ -422,7 +429,7 @@ func TestTriggersNewMergesAndPrunes(t *testing.T) {
 	// the new query is a gap: the merge must keep "please trigger this", add the
 	// new one, and prune the removed query.
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
-	os.WriteFile(path, []byte(`{"triggers": [
+	mustWriteFile(t, path, []byte(`{"triggers": [
 		{"query": "please trigger this", "should_trigger": true},
 		{"query": "fresh query", "should_trigger": false}
 	]}`), 0o644)

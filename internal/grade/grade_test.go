@@ -72,7 +72,7 @@ func boolish(p *bool) string {
 
 func TestFileAssertions(t *testing.T) {
 	o := opts(t, "")
-	os.WriteFile(filepath.Join(o.Workspace, "present.txt"), []byte("x"), 0o644)
+	mustWriteFile(t, filepath.Join(o.Workspace, "present.txt"), []byte("x"), 0o644)
 
 	tests := []struct {
 		a    evalspec.Assertion
@@ -93,7 +93,7 @@ func TestFileAssertions(t *testing.T) {
 
 func TestRegexAssertions(t *testing.T) {
 	o := opts(t, "final output says DONE")
-	os.WriteFile(filepath.Join(o.Workspace, "main.go"), []byte("func TestClamp(t *testing.T) {\n\tt.Run(\"x\", nil)\n}\n"), 0o644)
+	mustWriteFile(t, filepath.Join(o.Workspace, "main.go"), []byte("func TestClamp(t *testing.T) {\n\tt.Run(\"x\", nil)\n}\n"), 0o644)
 
 	tests := []struct {
 		a            evalspec.Assertion
@@ -117,8 +117,8 @@ func TestRegexAssertions(t *testing.T) {
 
 func TestCommandAssertions(t *testing.T) {
 	o := opts(t, "")
-	os.WriteFile(filepath.Join(o.Workspace, "f.txt"), []byte("x"), 0o644)
-	os.MkdirAll(filepath.Join(o.Workspace, "sub"), 0o755)
+	mustWriteFile(t, filepath.Join(o.Workspace, "f.txt"), []byte("x"), 0o644)
+	mustMkdirAll(t, filepath.Join(o.Workspace, "sub"), 0o755)
 
 	exitOne := 1
 	tests := []struct {
@@ -177,7 +177,7 @@ func TestToolCallAssertions(t *testing.T) {
 // deterministic entries grade as before.
 func TestLLMJudgeBatch(t *testing.T) {
 	o := opts(t, "the readme explains tradeoffs")
-	os.WriteFile(filepath.Join(o.Workspace, "README.md"), []byte("x"), 0o644)
+	mustWriteFile(t, filepath.Join(o.Workspace, "README.md"), []byte("x"), 0o644)
 	j := o.Judge.(*fakeJudge)
 	j.response = "Sure! Here is my grading:\n```json\n" +
 		`{"verdicts": [
@@ -242,7 +242,7 @@ func TestLLMJudgeErrorsFailLoudly(t *testing.T) {
 	}
 	for _, tt := range tests {
 		o := opts(t, "x")
-		os.WriteFile(filepath.Join(o.Workspace, "kept.txt"), []byte("x"), 0o644)
+		mustWriteFile(t, filepath.Join(o.Workspace, "kept.txt"), []byte("x"), 0o644)
 		tt.set(&o)
 		verdicts := Case(context.Background(), []evalspec.Assertion{
 			{Type: "llm", Text: "first"},
@@ -338,5 +338,21 @@ func TestLLMJudgeExpectedOutputContext(t *testing.T) {
 	caseOne(t, evalspec.Assertion{Type: "llm", Text: "t"}, o)
 	if !strings.Contains(j.gotPrompt, "a tidy summary table") {
 		t.Errorf("prompt missing expected-output context:\n%s", j.gotPrompt)
+	}
+}
+
+// mustWriteFile writes fixture data, failing the test on error.
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// mustMkdirAll creates a fixture directory tree, failing the test on error.
+func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatal(err)
 	}
 }

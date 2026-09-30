@@ -51,8 +51,8 @@ func TestLinkFileNoOps(t *testing.T) {
 	// An existing dst is never overwritten.
 	src := filepath.Join(dir, "src")
 	dst := filepath.Join(dir, "existing")
-	os.WriteFile(src, []byte("new"), 0o600)
-	os.WriteFile(dst, []byte("old"), 0o600)
+	mustWriteFile(t, src, []byte("new"), 0o600)
+	mustWriteFile(t, dst, []byte("old"), 0o600)
 	linkFile(src, dst)
 	if got, _ := os.ReadFile(dst); string(got) != "old" {
 		t.Errorf("existing dst overwritten: %q", got)
@@ -116,9 +116,10 @@ func TestCodexIsolation(t *testing.T) {
 	opHome := t.TempDir()
 	t.Setenv("CODEX_HOME", opHome)
 	auth := []byte(`{"OPENAI_API_KEY":null,"tokens":{}}`)
-	os.WriteFile(filepath.Join(opHome, "auth.json"), auth, 0o600)
-	os.WriteFile(filepath.Join(opHome, "config.toml"), []byte(
-		"model = \"gpt-5.2\"\ncli_auth_credentials_store = \"keyring\"\n[mcp_servers.github]\ncommand = \"gh-mcp\"\n"), 0o644)
+	mustWriteFile(t, filepath.Join(opHome, "auth.json"), auth, 0o600)
+	mustWriteFile(t, filepath.Join(opHome, "config.toml"), []byte(
+		"model = \"gpt-5.2\"\ncli_auth_credentials_store = \"keyring\"\n[mcp_servers.github]\ncommand = \"gh-mcp\"\n",
+	), 0o644)
 
 	ws := t.TempDir()
 	iso := isolatedDir(ws, codexHomeRel)
@@ -151,10 +152,18 @@ func TestCodexIsolation(t *testing.T) {
 	// No credential-store selection → no config.toml seeded at all.
 	op2 := t.TempDir()
 	t.Setenv("CODEX_HOME", op2)
-	os.WriteFile(filepath.Join(op2, "config.toml"), []byte("model = \"gpt-5.2\"\n"), 0o644)
+	mustWriteFile(t, filepath.Join(op2, "config.toml"), []byte("model = \"gpt-5.2\"\n"), 0o644)
 	ws2 := t.TempDir()
 	_ = NewCodex().TriggerSpec(ws2, "q", "m", false)
 	if _, err := os.Lstat(filepath.Join(isolatedDir(ws2, codexHomeRel), "config.toml")); !os.IsNotExist(err) {
 		t.Errorf("expected no seeded config.toml, err=%v", err)
+	}
+}
+
+// mustWriteFile writes fixture data, failing the test on error.
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatal(err)
 	}
 }

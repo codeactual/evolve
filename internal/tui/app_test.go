@@ -5,6 +5,7 @@ package tui
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -225,12 +226,7 @@ func yieldsClearScreen(cmd tea.Cmd) bool {
 	}
 	msg := cmd()
 	if batch, ok := msg.(tea.BatchMsg); ok {
-		for _, c := range batch {
-			if yieldsClearScreen(c) {
-				return true
-			}
-		}
-		return false
+		return slices.ContainsFunc(batch, yieldsClearScreen)
 	}
 	return reflect.TypeOf(msg) == reflect.TypeOf(tea.ClearScreen())
 }
@@ -242,12 +238,7 @@ func yieldsQuit(cmd tea.Cmd) bool {
 	}
 	msg := cmd()
 	if batch, ok := msg.(tea.BatchMsg); ok {
-		for _, c := range batch {
-			if yieldsQuit(c) {
-				return true
-			}
-		}
-		return false
+		return slices.ContainsFunc(batch, yieldsQuit)
 	}
 	_, ok := msg.(tea.QuitMsg)
 	return ok

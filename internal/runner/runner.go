@@ -56,7 +56,8 @@ func newObservability() *observability {
 // marks the span errored only on runErr (a started-but-cancelled or unstartable
 // run). A timeout or non-zero exit is a normal outcome here, not a span error.
 func (o *observability) observe(ctx context.Context, span trace.Span, spec model.CommandSpec,
-	res Result, runErr error) {
+	res Result, runErr error,
+) {
 	span.SetAttributes(
 		attribute.Int("exit_code", res.ExitCode),
 		attribute.Bool("timed_out", res.TimedOut),
@@ -124,7 +125,8 @@ type Exec struct {
 // returned error is non-nil only for unstartable commands or parent-context
 // cancellation (Ctrl-C).
 func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Duration,
-	scan *Scan) (Result, error) {
+	scan *Scan,
+) (Result, error) {
 	o := obs()
 	ctx, span := o.tracer.Start(ctx, "evolve.agent.exec")
 	defer span.End()

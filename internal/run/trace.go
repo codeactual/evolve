@@ -52,8 +52,8 @@ func unitSpanAttrs(ref plan.UnitRef) []attribute.KeyValue {
 
 // splitUnitKey splits a "provider/model" unit key into its parts.
 func splitUnitKey(key string) (provider, model string) {
-	if i := strings.IndexByte(key, '/'); i >= 0 {
-		return key[:i], key[i+1:]
+	if before, after, ok := strings.Cut(key, "/"); ok {
+		return before, after
 	}
 	return key, ""
 }

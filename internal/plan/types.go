@@ -6,6 +6,7 @@ package plan
 // Kind distinguishes the two eval tiers a unit belongs to.
 type Kind int
 
+// The two eval tiers.
 const (
 	KindTriggers Kind = iota
 	KindEvals
@@ -14,6 +15,7 @@ const (
 // Mode is how a unit executes: a real agent run, or token counting only.
 type Mode int
 
+// The two unit execution modes.
 const (
 	ModeRun Mode = iota
 	ModeCountOnly
@@ -22,6 +24,7 @@ const (
 // Status is one item's outcome (a query for triggers, an eval for evals).
 type Status int
 
+// The outcomes an item can have.
 const (
 	StatusPass Status = iota
 	StatusFail

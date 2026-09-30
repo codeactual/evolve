@@ -69,10 +69,16 @@ func TestParseMaturityFlag(t *testing.T) {
 		wantErr string // substring; "" means no error
 	}{
 		{"single", "stable", []report.Maturity{report.MaturityStable}, ""},
-		{"all three", "stable,unstable,prerelease",
-			[]report.Maturity{report.MaturityStable, report.MaturityUnstable, report.MaturityPrerelease}, ""},
-		{"trimmed", " unstable , prerelease ",
-			[]report.Maturity{report.MaturityUnstable, report.MaturityPrerelease}, ""},
+		{
+			"all three", "stable,unstable,prerelease",
+			[]report.Maturity{report.MaturityStable, report.MaturityUnstable, report.MaturityPrerelease},
+			"",
+		},
+		{
+			"trimmed", " unstable , prerelease ",
+			[]report.Maturity{report.MaturityUnstable, report.MaturityPrerelease},
+			"",
+		},
 		{"unknown token", "stable,bogus", nil, `unknown maturity level "bogus"`},
 		{"unknown level unknown", "unknown", nil, `unknown maturity level "unknown"`},
 		{"empty string", "", nil, "empty maturity set"},
