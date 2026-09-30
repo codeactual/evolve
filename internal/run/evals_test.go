@@ -57,8 +57,8 @@ func (r *captureReporter) UnitFinished(plan.UnitRef, UnitSummary, string) {}
 func (r *captureReporter) Warn(string, ...any)                            {}
 
 // fakeEvalProvider is a harness implementing harness.Harness + EvalRunner
-// (+ model.TokenCounter when counting). reportsUsage=false models a cursor-like
-// harness that reports no usage.
+// (+ model.TokenCounter when counting). reportsUsage=false models a harness
+// that reports no usage.
 type fakeEvalProvider struct {
 	reportsUsage bool
 	priced       bool
@@ -432,7 +432,9 @@ func TestHeadLines(t *testing.T) {
 	}
 }
 
-func TestEvalsCursorLikeProvider(t *testing.T) {
+// TestEvalsProviderWithoutUsage: a provider with no counting API, no usage
+// reporting and no pricing still runs and grades its evals.
+func TestEvalsProviderWithoutUsage(t *testing.T) {
 	repo := evalRepoFixture(t)
 	opts := evalOptions(t, repo, &fakeEvalProvider{reportsUsage: false}) // no counting, no usage, no pricing
 
@@ -447,7 +449,7 @@ func TestEvalsCursorLikeProvider(t *testing.T) {
 	entry := file.Eval("fake/model-1")
 	r := entry.Results[0]
 	if r.Measured != nil || r.Estimate != nil || entry.Pricing != nil {
-		t.Errorf("cursor-like entry leaked usage data: %+v", r)
+		t.Errorf("usage-less entry leaked usage data: %+v", r)
 	}
 	if r.Passed == nil || !*r.Passed {
 		t.Errorf("result = %+v, want graded pass", r)

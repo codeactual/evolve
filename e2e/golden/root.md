@@ -17,8 +17,8 @@ reporting, or no published pricing).
 | Provider | Model | Passed | Pass rate | Δ rate | Avg run | Input tokens | Est. input cost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Anthropic | Claude Fable 5 (`claude-fable-5`) | 1/2 | 50% | -50% | 7.1s | 2,770 | $0.0277 |
-| Cursor | Cursor Composer 2.5 (`composer-2.5`) | 2/2 | 100% | — | 12.7s | n/a | n/a |
-| Google | Gemini 3.5 Flash (`gemini-3.5-flash`) | — | — | — | — | 2,580 | $0.0039 |
+| fake | Fake No-Usage (`no-usage`) | 2/2 | 100% | — | 12.7s | n/a | n/a |
+| OpenAI | GPT-5.4 (`gpt-5.4`) | — | — | — | — | 2,580 | $0.0065 |
 
 ### Evals
 
@@ -35,16 +35,16 @@ reporting, or no published pricing).
 | Provider | Model | Result | Rate | Δ rate | Avg run | Input tokens | Est. cost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Anthropic | Claude Fable 5 (`claude-fable-5`) | PASS | 3/3 | +0% | 9.1s | 1,385 | $0.0138 |
-| Cursor | Cursor Composer 2.5 (`composer-2.5`) | PASS | 2/3 | — | 14.3s | n/a | n/a |
-| Google | Gemini 3.5 Flash (`gemini-3.5-flash`) | — | — | — | — | 1,290 | $0.0019 |
+| fake | Fake No-Usage (`no-usage`) | PASS | 2/3 | — | 14.3s | n/a | n/a |
+| OpenAI | GPT-5.4 (`gpt-5.4`) | — | — | — | — | 1,290 | $0.0032 |
 
 #### Write pytest tests (expected: no)
 
 | Provider | Model | Result | Rate | Δ rate | Avg run | Input tokens | Est. cost |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Anthropic | Claude Fable 5 (`claude-fable-5`) | FAIL | 2/3 | -67% | 5.0s | 1,385 | $0.0138 |
-| Cursor | Cursor Composer 2.5 (`composer-2.5`) | PASS | 0/3 | — | 11.0s | n/a | n/a |
-| Google | Gemini 3.5 Flash (`gemini-3.5-flash`) | — | — | — | — | 1,290 | $0.0019 |
+| fake | Fake No-Usage (`no-usage`) | PASS | 0/3 | — | 11.0s | n/a | n/a |
+| OpenAI | GPT-5.4 (`gpt-5.4`) | — | — | — | — | 1,290 | $0.0032 |
 
 ### Evals
 

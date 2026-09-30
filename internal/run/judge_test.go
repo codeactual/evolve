@@ -125,7 +125,8 @@ func TestHarnessJudgeErrors(t *testing.T) {
 }
 
 func TestNewHarnessJudgeRejectsNonEvalHarness(t *testing.T) {
-	sel := harness.Selection{Model: model.Model{ID: "google/gemini"}, Harness: harness.NewGemini()}
+	// fakeTriggerProvider implements harness.Harness but not EvalRunner.
+	sel := harness.Selection{Model: model.Model{ID: "fake/model-1"}, Harness: &fakeTriggerProvider{}}
 	if _, err := NewHarnessJudge(sel, &specRunner{}, false); err == nil ||
 		!strings.Contains(err.Error(), "cannot run headless judge sessions") {
 		t.Errorf("err = %v, want headless-judge rejection", err)

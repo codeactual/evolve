@@ -80,8 +80,8 @@ func staleRepo(t *testing.T) string {
 	f.SetTrigger("anthropic/claude-haiku-4-5", &results.TriggerEntry{
 		Header: hdr("anthropic", "claude-haiku-4-5"), Summary: results.TriggerSummary{Total: 1},
 	})
-	f.SetTrigger("google/gemini-3.5-flash", &results.TriggerEntry{
-		Header: hdr("google", "gemini-3.5-flash"), Summary: results.TriggerSummary{Total: 1},
+	f.SetTrigger("openai/gpt-5.5", &results.TriggerEntry{
+		Header: hdr("openai", "gpt-5.5"), Summary: results.TriggerSummary{Total: 1},
 	})
 	if _, err := f.SaveDir(filepath.Join(root, "evals", "solo-skill"), "json"); err != nil {
 		t.Fatal(err)
@@ -98,15 +98,15 @@ func TestFindAndDropStaleResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := StaleModels(stale); len(got) != 1 || got[0] != "google/gemini-3.5-flash" {
-		t.Fatalf("stale models = %v, want [google/gemini-3.5-flash]", got)
+	if got := StaleModels(stale); len(got) != 1 || got[0] != "openai/gpt-5.5" {
+		t.Fatalf("stale models = %v, want [openai/gpt-5.5]", got)
 	}
 
 	if err := o.DropStaleResults(stale); err != nil {
 		t.Fatal(err)
 	}
 	reloaded, _, _ := results.LoadDir(filepath.Join(root, "evals", "solo-skill"), "solo", "solo-skill")
-	if _, ok := reloaded.Models["google/gemini-3.5-flash"]; ok {
+	if _, ok := reloaded.Models["openai/gpt-5.5"]; ok {
 		t.Error("dropped model still on disk")
 	}
 	if _, ok := reloaded.Models["anthropic/claude-haiku-4-5"]; !ok {

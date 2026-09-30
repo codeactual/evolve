@@ -14,9 +14,11 @@ func TestAllowedHarnessIDs(t *testing.T) {
 	if ids, configured := o.AllowedHarnessIDs(); configured || ids != nil {
 		t.Errorf("unset: (%v,%v), want (nil,false)", ids, configured)
 	}
-	o.Viper.Set("harnesses", []string{"claude", "copilot"})
-	if ids, configured := o.AllowedHarnessIDs(); !configured || len(ids) != 2 {
-		t.Errorf("set: (%v,%v), want 2 ids/true", ids, configured)
+	// AllowedHarnessIDs only reports the configured ids; validating them is
+	// Harnesses' job, so an unknown id passes through here.
+	o.Viper.Set("harnesses", []string{"claude", "codex", "bogus"})
+	if ids, configured := o.AllowedHarnessIDs(); !configured || len(ids) != 3 {
+		t.Errorf("set: (%v,%v), want 3 ids/true", ids, configured)
 	}
 }
 

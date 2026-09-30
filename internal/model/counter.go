@@ -34,8 +34,7 @@ var ErrNoCredential = errors.New("no API key or OAuth token set")
 var defaultClient = &http.Client{Timeout: 60 * time.Second}
 
 // CounterFor returns the counting client for a provider id, or (nil, false) for
-// a vendor with no counting API (Cursor). Cursor/Copilot/Antigravity harnesses
-// report no usage either, so their models stay token-less end-to-end.
+// a vendor with no counting API.
 func CounterFor(providerID string) (TokenCounter, bool) {
 	switch providerID {
 	case ProviderAnthropic:
@@ -53,18 +52,6 @@ func CounterFor(providerID string) (TokenCounter, bool) {
 			envKeys: []string{"EVOLVE_OPENAI_API_KEY", "OPENAI_API_KEY"},
 			client:  defaultClient,
 		}, true
-	case ProviderGoogle:
-		return googleCounter{
-			urlBase: "https://generativelanguage.googleapis.com/v1beta/models/",
-			envKeys: []string{"EVOLVE_GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"},
-			client:  defaultClient,
-		}, true
-	case ProviderXAI:
-		return xaiCounter{
-			url:     "https://api.x.ai/v1/tokenize-text",
-			envKeys: []string{"EVOLVE_XAI_API_KEY", "XAI_API_KEY"},
-			client:  defaultClient,
-		}, true
 	}
 	return nil, false
 }
@@ -80,10 +67,6 @@ func CounterEnvKeys(providerID string) []string {
 		}
 	case ProviderOpenAI:
 		return []string{"EVOLVE_OPENAI_API_KEY", "OPENAI_API_KEY"}
-	case ProviderGoogle:
-		return []string{"EVOLVE_GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"}
-	case ProviderXAI:
-		return []string{"EVOLVE_XAI_API_KEY", "XAI_API_KEY"}
 	}
 	return nil
 }
@@ -164,56 +147,6 @@ func (o openaiCounter) CountTokens(ctx context.Context, modelID, text string) (i
 		return 0, fmt.Errorf("input_tokens response missing input_tokens")
 	}
 	return *resp.InputTokens, nil
-}
-
-// googleCounter calls POST /v1beta/models/{model}:countTokens.
-type googleCounter struct {
-	urlBase string
-	envKeys []string
-	client  *http.Client
-}
-
-func (g googleCounter) CountTokens(ctx context.Context, modelID, text string) (int, error) {
-	key := firstEnv(g.envKeys)
-	if key == "" {
-		return 0, ErrNoCredential
-	}
-	headers := map[string]string{"x-goog-api-key": key}
-	body := map[string]any{"contents": []map[string]any{{"parts": []map[string]any{{"text": text}}}}}
-	var resp struct {
-		TotalTokens *int `json:"totalTokens"`
-	}
-	if err := postJSON(ctx, g.client, g.urlBase+modelID+":countTokens", headers, body, &resp); err != nil {
-		return 0, fmt.Errorf("google count tokens: %w", err)
-	}
-	if resp.TotalTokens == nil {
-		return 0, fmt.Errorf("countTokens response missing totalTokens")
-	}
-	return *resp.TotalTokens, nil
-}
-
-// xaiCounter calls POST /v1/tokenize-text and returns the length of the
-// token_ids array (the official xAI tokenizer endpoint).
-type xaiCounter struct {
-	url     string
-	envKeys []string
-	client  *http.Client
-}
-
-func (x xaiCounter) CountTokens(ctx context.Context, modelID, text string) (int, error) {
-	key := firstEnv(x.envKeys)
-	if key == "" {
-		return 0, ErrNoCredential
-	}
-	headers := map[string]string{"authorization": "Bearer " + key}
-	body := map[string]any{"model": modelID, "text": text}
-	var resp struct {
-		TokenIDs []json.RawMessage `json:"token_ids"`
-	}
-	if err := postJSON(ctx, x.client, x.url, headers, body, &resp); err != nil {
-		return 0, fmt.Errorf("xai tokenize-text: %w", err)
-	}
-	return len(resp.TokenIDs), nil
 }
 
 func firstEnv(keys []string) string {

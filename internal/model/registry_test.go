@@ -4,6 +4,7 @@
 package model
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -53,11 +54,7 @@ func TestKeyStability(t *testing.T) {
 	if m.BareID() != "claude-sonnet-4-6" {
 		t.Errorf("BareID() = %q, want claude-sonnet-4-6", m.BareID())
 	}
-	// Copilot drives the same model under a different CLI id; the divergence
-	// lives only in the Supported map, never in the key.
-	if id, ok := m.CLIModelID("copilot"); !ok || id != "claude-sonnet-4.6" {
-		t.Errorf("copilot CLI id = %q (%v), want claude-sonnet-4.6", id, ok)
-	}
+	// The CLI id lives only in the Supported map, never in the key.
 	if id, ok := m.CLIModelID("claude"); !ok || id != "claude-sonnet-4-6" {
 		t.Errorf("claude CLI id = %q (%v), want claude-sonnet-4-6", id, ok)
 	}
@@ -84,10 +81,11 @@ func TestGPT56Models(t *testing.T) {
 			if m.InputUSD == nil || *m.InputUSD != tc.input || m.OutputUSD == nil || *m.OutputUSD != tc.output {
 				t.Errorf("pricing = %v/%v, want %.2f/%.2f", m.InputUSD, m.OutputUSD, tc.input, tc.output)
 			}
-			for _, harnessID := range []string{HarnessCodex, HarnessCopilot} {
-				if id, ok := m.CLIModelID(harnessID); !ok || id != m.BareID() {
-					t.Errorf("%s CLI id = %q (%v), want %q", harnessID, id, ok, m.BareID())
-				}
+			if id, ok := m.CLIModelID(HarnessCodex); !ok || id != m.BareID() {
+				t.Errorf("codex CLI id = %q (%v), want %q", id, ok, m.BareID())
+			}
+			if len(m.Supported) != 1 {
+				t.Errorf("Supported = %v, want Codex only", m.Supported)
 			}
 			if m.Preferred != HarnessCodex {
 				t.Errorf("Preferred = %q, want %q", m.Preferred, HarnessCodex)
@@ -96,65 +94,39 @@ func TestGPT56Models(t *testing.T) {
 	}
 }
 
-func TestGrok45Model(t *testing.T) {
-	m, ok := ModelByID(builtins(), "xai/grok-4.5")
-	if !ok {
-		t.Fatal("xai/grok-4.5 missing from registry")
+// TestBuiltinsAreClaudeAndCodexOnly pins the slimmed registry: two vendors, and
+// every model driven only by the Claude or Codex harness.
+func TestBuiltinsAreClaudeAndCodexOnly(t *testing.T) {
+	var providers []string
+	for _, p := range Providers() {
+		providers = append(providers, p.ID)
 	}
-	if m.Preferred != HarnessGrok {
-		t.Errorf("Preferred = %q, want %q", m.Preferred, HarnessGrok)
+	if want := []string{ProviderAnthropic, ProviderOpenAI}; !slices.Equal(providers, want) {
+		t.Errorf("Providers() = %v, want %v", providers, want)
 	}
-	if id, ok := m.CLIModelID(HarnessGrok); !ok || id != "grok-4.5" {
-		t.Errorf("grok CLI id = %q (%v), want grok-4.5", id, ok)
-	}
-	if m.InputUSD == nil || *m.InputUSD != 2.00 || m.OutputUSD == nil || *m.OutputUSD != 6.00 {
-		t.Errorf("pricing = %v/%v, want 2.00/6.00", m.InputUSD, m.OutputUSD)
-	}
-}
-
-func TestGrok46Model(t *testing.T) {
-	m, ok := ModelByID(builtins(), "xai/grok-4.6")
-	if !ok {
-		t.Fatal("xai/grok-4.6 missing from registry")
-	}
-	if m.Preferred != HarnessGrok {
-		t.Errorf("Preferred = %q, want %q", m.Preferred, HarnessGrok)
-	}
-	if id, ok := m.CLIModelID(HarnessGrok); !ok || id != "grok-4.6" {
-		t.Errorf("grok CLI id = %q (%v), want grok-4.6", id, ok)
-	}
-	if m.InputUSD == nil || *m.InputUSD != 2.00 || m.OutputUSD == nil || *m.OutputUSD != 6.00 {
-		t.Errorf("pricing = %v/%v, want 2.00/6.00", m.InputUSD, m.OutputUSD)
-	}
-}
-
-func TestComposer25GrokSupport(t *testing.T) {
-	m, ok := ModelByID(builtins(), "cursor/composer-2.5")
-	if !ok {
-		t.Fatal("cursor/composer-2.5 missing from registry")
-	}
-	if id, ok := m.CLIModelID(HarnessGrok); !ok || id != "grok-composer-2.5-fast" {
-		t.Errorf("grok CLI id = %q (%v), want grok-composer-2.5-fast", id, ok)
-	}
-	if m.Preferred != HarnessCursor {
-		t.Errorf("Preferred = %q, want %q", m.Preferred, HarnessCursor)
+	for _, m := range builtins() {
+		for id := range m.Supported {
+			if id != HarnessClaude && id != HarnessCodex {
+				t.Errorf("model %q: unexpected harness %q", m.ID, id)
+			}
+		}
 	}
 }
 
 // TestAllModelsOverride replaces one provider's matrix and leaves the others.
 func TestAllModelsOverride(t *testing.T) {
 	override := map[string][]Model{
-		ProviderCursor: {{
-			ID: "cursor/composer-3", ProviderID: ProviderCursor, Name: "Composer 3",
-			Supported: map[string]string{HarnessCursor: "composer-3"}, Preferred: HarnessCursor,
+		ProviderOpenAI: {{
+			ID: "openai/gpt-6", ProviderID: ProviderOpenAI, Name: "GPT-6",
+			Supported: map[string]string{HarnessCodex: "gpt-6"}, Preferred: HarnessCodex,
 		}},
 	}
 	got := AllModels(override)
-	if _, ok := ModelByID(got, "cursor/composer-2.5"); ok {
-		t.Error("builtin cursor/composer-2.5 should be replaced by the override")
+	if _, ok := ModelByID(got, "openai/gpt-5.5"); ok {
+		t.Error("builtin openai/gpt-5.5 should be replaced by the override")
 	}
-	if _, ok := ModelByID(got, "cursor/composer-3"); !ok {
-		t.Error("override cursor/composer-3 missing")
+	if _, ok := ModelByID(got, "openai/gpt-6"); !ok {
+		t.Error("override openai/gpt-6 missing")
 	}
 	if _, ok := ModelByID(got, "anthropic/claude-sonnet-4-6"); !ok {
 		t.Error("non-overridden anthropic models should remain")

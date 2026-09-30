@@ -68,7 +68,7 @@ func TestCountTokens(t *testing.T) {
 	})
 
 	t.Run("non-counting provider yields nils", func(t *testing.T) {
-		p := &fakeTriggerProvider{} // no TokenCounter capability (cursor-like)
+		p := &fakeTriggerProvider{} // no TokenCounter capability
 		opts := Options{Counter: newCounter(), Jobs: 4}
 		sel := harness.Selection{Model: p.canonicalModel(), Harness: p}
 		for i, c := range opts.countTokens(context.Background(), sel, texts) {

@@ -73,7 +73,7 @@ func New(path string, stderr io.Writer) *Counter {
 // the counting API expects.
 func (c *Counter) Count(ctx context.Context, tc model.TokenCounter, providerID, modelID, text string) *int {
 	if tc == nil {
-		return nil // capability absent (e.g. cursor) — expected, no warning
+		return nil // capability absent (vendor has no counting API) — expected, no warning
 	}
 
 	ctx, span := tracer().Start(ctx, "evolve.tokencount", trace.WithAttributes(

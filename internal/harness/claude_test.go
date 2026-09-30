@@ -50,6 +50,15 @@ const (
 {"type":"result","subtype":"success","is_error":false,"result":"Created the file and ran the tests.","usage":{"input_tokens":100,"output_tokens":250}}`
 )
 
+func containsPair(argv []string, flag, value string) bool {
+	for i := 0; i+1 < len(argv); i++ {
+		if argv[i] == flag && argv[i+1] == value {
+			return true
+		}
+	}
+	return false
+}
+
 // TestClaudeEvalSpec locks in the bypass-permissions eval posture: no tool
 // allowlist, and Claude's own Bash sandbox disabled only when evolve's host
 // sandbox already confines the run (the two cannot nest).

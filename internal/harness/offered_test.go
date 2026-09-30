@@ -14,15 +14,10 @@ import (
 )
 
 // TestOfferedModelsCapability pins which harnesses can report the operator's
-// offered models: Claude (client-side /model alias list), Codex (app-server
-// model/list), and Grok (`grok models`). The rest have no listing surface, so
-// their models always count as offered (fail open).
+// offered models: Claude (client-side /model alias list) and Codex (app-server
+// model/list).
 func TestOfferedModelsCapability(t *testing.T) {
-	want := map[string]bool{
-		model.HarnessClaude: true, model.HarnessCodex: true, model.HarnessGemini: false,
-		model.HarnessCursor: false, model.HarnessCopilot: false, model.HarnessAntigravity: false,
-		model.HarnessGrok: true,
-	}
+	want := map[string]bool{model.HarnessClaude: true, model.HarnessCodex: true}
 	for _, h := range All() {
 		_, isLister := h.(OfferedModels)
 		if isLister != want[h.ID()] {
@@ -34,7 +29,7 @@ func TestOfferedModelsCapability(t *testing.T) {
 func TestOffersModel(t *testing.T) {
 	m := model.Model{
 		ID: "anthropic/claude-sonnet-5", ProviderID: "anthropic", Name: "Claude Sonnet 5",
-		Supported: map[string]string{"claude": "claude-sonnet-5", "copilot": "claude-sonnet-5"},
+		Supported: map[string]string{"claude": "claude-sonnet-5"},
 		Preferred: "claude",
 	}
 	cases := []struct {
@@ -164,34 +159,5 @@ func TestCodexListOfferedModelsNoResponse(t *testing.T) {
 	offered, err := NewCodex().ListOfferedModels(t.Context(), exec)
 	if err != nil || offered != nil {
 		t.Errorf("missing response = (%v, %v), want (nil, nil) — unknown fails open", offered, err)
-	}
-}
-
-const grokModelsOutput = `You are logged in with grok.com.
-
-Default model: grok-4.5
-
-Available models:
-  * grok-4.5 (default)
-  * grok-composer-2.5-fast
-`
-
-func TestGrokListOfferedModels(t *testing.T) {
-	exec := func(_ context.Context, spec model.CommandSpec, done func([]byte) bool) ([]byte, error) {
-		if done != nil {
-			t.Error("grok probe passed a done predicate; its CLI exits on its own")
-		}
-		if want := []string{"grok", "models"}; !slices.Equal(spec.Argv, want) {
-			t.Errorf("argv = %v, want %v", spec.Argv, want)
-		}
-		return []byte(grokModelsOutput), nil
-	}
-	offered, err := NewGrok().ListOfferedModels(t.Context(), exec)
-	if err != nil {
-		t.Fatalf("ListOfferedModels: %v", err)
-	}
-	want := []string{"grok-4.5", "grok-composer-2.5-fast"}
-	if !slices.Equal(offered, want) {
-		t.Errorf("offered = %v, want %v", offered, want)
 	}
 }

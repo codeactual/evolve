@@ -12,11 +12,9 @@ import (
 // its CLI at a throwaway, workspace-rooted state directory (".evolve/<name>-home")
 // so trigger/eval runs never touch the operator's real session history or
 // long-term memory; the directory dies with the workspace. Auth is bridged in
-// from the operator's real config root — symlinked for auth-only files (so a
-// mid-run token refresh writes through) and copied for files that mix
-// credentials with mutable config (so a run can never write back). CLIs with a
-// dedicated config-dir variable (CLAUDE_CONFIG_DIR, CODEX_HOME, COPILOT_HOME,
-// GROK_HOME) get that; the rest run under an overridden $HOME.
+// from the operator's real config root: the auth-only files are symlinked, so a
+// mid-run token refresh writes through. Both CLIs have a dedicated config-dir
+// variable (CLAUDE_CONFIG_DIR, CODEX_HOME).
 //
 // All helpers are best-effort and never fail the run: a failure here still
 // leaves the env override set, so the CLI creates its own tree (possibly
@@ -24,7 +22,7 @@ import (
 // an evolve crash.
 
 // isolatedDir is the absolute workspace-rooted path for a slash-separated
-// relative state dir like ".evolve/grok-home".
+// relative state dir like ".evolve/claude-home".
 func isolatedDir(ws, rel string) string {
 	if ws == "" {
 		return filepath.FromSlash(rel)
@@ -68,46 +66,6 @@ func linkFile(src, dst string) {
 		return
 	}
 	_ = os.WriteFile(dst, data, 0o600)
-}
-
-// copyFile0600 copies src into an isolated state dir with owner-only
-// permissions. Used instead of linkFile for files that mix credentials with
-// mutable config: the agent may rewrite them mid-run, and a symlink would let
-// those writes land in the operator's real file. No-op when src is missing or
-// dst already exists.
-func copyFile0600(src, dst string) {
-	if _, err := os.Lstat(dst); err == nil {
-		return
-	}
-	data, err := os.ReadFile(src)
-	if err != nil {
-		return
-	}
-	_ = os.WriteFile(dst, data, 0o600)
-}
-
-// linkGitConfig bridges the operator's git configuration (~/.gitconfig and the
-// XDG ~/.config/git tree) into a fake HOME so git identity and settings keep
-// working inside HOME-overridden agent sessions.
-func linkGitConfig(fakeHome string) {
-	realHome, err := os.UserHomeDir()
-	if err != nil || realHome == "" || sameFilePath(realHome, fakeHome) {
-		return
-	}
-	linkFile(filepath.Join(realHome, ".gitconfig"), filepath.Join(fakeHome, ".gitconfig"))
-	xdgGit := filepath.Join(realHome, ".config", "git")
-	if _, err := os.Stat(xdgGit); err != nil {
-		return
-	}
-	dstDir := filepath.Join(fakeHome, ".config")
-	if err := os.MkdirAll(dstDir, 0o755); err != nil {
-		return
-	}
-	dst := filepath.Join(dstDir, "git")
-	if _, err := os.Lstat(dst); err == nil {
-		return
-	}
-	_ = os.Symlink(xdgGit, dst)
 }
 
 // sameFilePath reports whether a and b name the same path after cleaning.

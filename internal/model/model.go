@@ -10,9 +10,9 @@ import (
 )
 
 // Provider is a model vendor: the entity that owns and prices a family of
-// models (Anthropic, OpenAI, Google, Cursor, xAI). It is distinct from a harness —
-// the CLI that drives a model — because several harnesses can run one vendor's
-// model (Claude Code and Copilot both run Claude Sonnet).
+// models (Anthropic, OpenAI). It is distinct from a harness — the CLI that
+// drives a model — because a harness drives a model without owning it, so the
+// same harness can run many vendors' models.
 type Provider struct {
 	ID   string `json:"id"`   // registry key, e.g. "anthropic"
 	Name string `json:"name"` // human name, e.g. "Anthropic"
@@ -25,8 +25,8 @@ type Provider struct {
 //
 // Supported maps each harness id that can run this model to the CLI-specific
 // model-id string that harness's --model flag expects — this is where harness
-// id divergence lives (Claude Code wants "claude-sonnet-4-6", Copilot wants
-// "claude-sonnet-4.6"). Preferred is the harness chosen when several supported
+// id divergence lives (Claude Code wants "claude-sonnet-4-6", Codex wants ids
+// like "gpt-5.5"). Preferred is the harness chosen when several supported
 // harnesses are eligible; it is always a key of Supported.
 type Model struct {
 	ID         string            `json:"id"`

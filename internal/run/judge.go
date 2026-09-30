@@ -29,8 +29,7 @@ type HarnessJudge struct {
 }
 
 // NewHarnessJudge binds a resolved judge selection to an executor. It errors
-// when the harness lacks eval support (Gemini, until its EvalRunner lands) or
-// its CLI is not on PATH — resolution failures surface at command start, never
+// when the harness lacks eval support or its CLI is not on PATH — resolution failures surface at command start, never
 // per-assertion.
 func NewHarnessJudge(sel harness.Selection, r Runner, hostSandboxed bool) (*HarnessJudge, error) {
 	eval, ok := sel.Harness.(harness.EvalRunner)

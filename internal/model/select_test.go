@@ -11,7 +11,7 @@ import (
 func TestModelIdentity(t *testing.T) {
 	m := Model{
 		ID: "anthropic/claude-sonnet-4-6", ProviderID: "anthropic",
-		Supported: map[string]string{"claude": "claude-sonnet-4-6", "copilot": "claude-sonnet-4.6"},
+		Supported: map[string]string{"claude": "claude-sonnet-4-6", "codex": "claude-sonnet-4-6"},
 		Preferred: "claude",
 	}
 	if m.Key() != "anthropic/claude-sonnet-4-6" {
@@ -20,11 +20,11 @@ func TestModelIdentity(t *testing.T) {
 	if m.BareID() != "claude-sonnet-4-6" {
 		t.Errorf("BareID() = %q", m.BareID())
 	}
-	if !m.Supports("copilot") || m.Supports("gemini") {
-		t.Error("Supports wrong for copilot/gemini")
+	if !m.Supports("codex") || m.Supports("unknown") {
+		t.Error("Supports wrong for codex/unknown")
 	}
-	if got := m.SupportedHarnessIDs(); !slices.Equal(got, []string{"claude", "copilot"}) {
-		t.Errorf("SupportedHarnessIDs() = %v, want sorted [claude copilot]", got)
+	if got := m.SupportedHarnessIDs(); !slices.Equal(got, []string{"claude", "codex"}) {
+		t.Errorf("SupportedHarnessIDs() = %v, want sorted [claude codex]", got)
 	}
 }
 
@@ -47,7 +47,7 @@ func TestMatchedBy(t *testing.T) {
 		{"bare id", []string{"claude-sonnet-4-6"}, true},
 		{"all", []string{"all"}, true},
 		{"trimmed", []string{"  anthropic  "}, true},
-		{"no match", []string{"openai", "google/gemini"}, false},
+		{"no match", []string{"openai", "openai/gpt-5.5"}, false},
 		{"empty", nil, false},
 	} {
 		if got := m.MatchedBy(tt.tokens); got != tt.want {

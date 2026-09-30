@@ -23,7 +23,7 @@ import (
 
 // Runner abstracts agent execution so tests inject fakes; runner.Exec is the
 // real implementation. scan is nil for collect mode (evals); non-nil enables
-// trigger early-exit via OnLine and/or SideHit (see runner.Scan).
+// trigger early-exit via OnLine (see runner.Scan).
 type Runner interface {
 	Run(ctx context.Context, spec model.CommandSpec, timeout time.Duration,
 		scan *runner.Scan) (runner.Result, error)

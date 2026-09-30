@@ -308,14 +308,6 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 				cliModelID, _ := sel.Model.CLIModelID(sel.Harness.ID())
 				spec := sel.Harness.TriggerSpec(ws, t.Query, cliModelID, opts.HostSandboxed)
 				spec.Argv[0] = cli
-				// Optional side channel (Grok PreToolUse hit file): cancel as soon
-				// as the skill is invoked, without waiting for streaming-json end.
-				var sideHit func() bool
-				if sc, ok := sel.Harness.(harness.TriggerSideChannel); ok {
-					var env []string
-					sideHit, env = sc.ArmTriggerHit(ws, skill)
-					spec.Env = append(spec.Env, env...)
-				}
 				scan := &runner.Scan{
 					OnLine: func(line []byte) bool {
 						hit, note := sel.Harness.ScanLine(line, skill, ws)
@@ -324,15 +316,10 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 						}
 						return hit
 					},
-					SideHit: sideHit,
 				}
 				res, err := opts.Runner.Run(runCtx, spec, opts.Timeout, scan)
 				if err != nil {
 					return err
-				}
-				// Race fallback: process died before the poller saw the marker.
-				if !res.Hit && sideHit != nil && sideHit() {
-					res.Hit = true
 				}
 				if res.TimedOut {
 					detail := ""

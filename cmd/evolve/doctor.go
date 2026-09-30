@@ -81,9 +81,6 @@ var doctorCmd = &cobra.Command{
 		fmt.Fprintf(cmd.OutOrStdout(), "\nLLM judge: %s\n", judgeStatus())
 
 		fmt.Fprintf(cmd.OutOrStdout(), "\nVersion pin: %s\n", versionPinStatus())
-
-		fmt.Fprintln(cmd.OutOrStdout(), "\nCursor model ids are config-driven: run `agent models` for the live list and"+
-			" pin them via providers.cursor.models in the .evolve config file.")
 		return nil
 	},
 }

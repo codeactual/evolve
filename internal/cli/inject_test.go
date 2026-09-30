@@ -62,10 +62,14 @@ func TestInjectModelsCreatesConfigAndSeedsBuiltins(t *testing.T) {
 			t.Errorf("effective registry missing %s after injection", want)
 		}
 	}
-	// The seeded Sonnet 4.6 entry must keep its non-default Copilot support.
+	// The seeded Sonnet 4.6 entry must keep its non-default display name and
+	// pricing through the round trip.
 	m, _ := model.ModelByID(models, "anthropic/claude-sonnet-4-6")
-	if m.Supported["copilot"] != "claude-sonnet-4.6" {
-		t.Errorf("seeded sonnet-4-6 lost its copilot id: %v", m.Supported)
+	if m.Name != "Claude Sonnet 4.6" {
+		t.Errorf("seeded sonnet-4-6 lost its display name: %q", m.Name)
+	}
+	if m.InputUSD == nil || *m.InputUSD != 3.00 || m.OutputUSD == nil || *m.OutputUSD != 15.00 {
+		t.Errorf("seeded sonnet-4-6 lost its pricing: %v/%v", m.InputUSD, m.OutputUSD)
 	}
 	// Other providers stay builtin: no stray override was written for them.
 	if _, ok := model.ModelByID(models, "openai/gpt-5.5"); !ok {
@@ -124,7 +128,7 @@ func TestInjectModelsMultipleProviders(t *testing.T) {
 	o := &Options{Viper: viper.New(), Root: dir}
 	_, added, err := o.InjectModels([]model.Model{
 		discovered("anthropic", "claude-sonnet-6", "Claude Sonnet 6"),
-		discovered("google", "gemini-4-pro", "Gemini 4 Pro"),
+		discovered("openai", "gpt-6", "GPT-6"),
 	})
 	if err != nil {
 		t.Fatalf("InjectModels: %v", err)
@@ -133,7 +137,7 @@ func TestInjectModelsMultipleProviders(t *testing.T) {
 		t.Fatalf("added = %v, want two", added)
 	}
 	models := reload(t, dir)
-	for _, want := range []string{"anthropic/claude-sonnet-6", "google/gemini-4-pro", "google/gemini-3.5-flash"} {
+	for _, want := range []string{"anthropic/claude-sonnet-6", "openai/gpt-6", "openai/gpt-5.5"} {
 		if _, ok := model.ModelByID(models, want); !ok {
 			t.Errorf("effective registry missing %s", want)
 		}
@@ -146,12 +150,21 @@ func TestEntryForDropsDefaults(t *testing.T) {
 		t.Errorf("defaults must be omitted, got %+v", e)
 	}
 
-	sonnet46, _ := model.ModelByID(model.AllModels(nil), "anthropic/claude-sonnet-4-6")
-	e = entryFor(sonnet46)
-	if e.Supported == nil || e.Supported["copilot"] != "claude-sonnet-4.6" {
-		t.Errorf("non-default supported map must be kept, got %+v", e)
+	// A builtin Codex model: the native supported map and preferred harness are
+	// defaults, but the display name and pricing are kept.
+	gpt55, _ := model.ModelByID(model.AllModels(nil), "openai/gpt-5.5")
+	e = entryFor(gpt55)
+	if e.Supported != nil || e.Preferred != "" {
+		t.Errorf("native supported/preferred must be omitted, got %+v", e)
 	}
-	if e.Preferred != "" {
-		t.Errorf("native preferred must be omitted, got %q", e.Preferred)
+	if e.Name != "GPT-5.5" || e.InputUSD == nil || *e.InputUSD != 5.00 {
+		t.Errorf("non-default name/pricing must be kept, got %+v", e)
+	}
+
+	// A CLI id that diverges from the vendor id is a non-default supported map.
+	gpt55.Supported = map[string]string{model.HarnessCodex: "gpt-5.5-cli"}
+	e = entryFor(gpt55)
+	if e.Supported == nil || e.Supported[model.HarnessCodex] != "gpt-5.5-cli" {
+		t.Errorf("non-default supported map must be kept, got %+v", e)
 	}
 }

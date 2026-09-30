@@ -173,9 +173,9 @@ func maximalResults() *results.File {
 			Evidence: "found X", Source: "expectation",
 		},
 	}
-	f.SetEval("cursor/composer-2.5", &results.EvalEntry{
+	f.SetEval("openai/gpt-5.3-codex-spark", &results.EvalEntry{
 		Header: results.Header{
-			Provider: "cursor", Model: "composer-2.5", Display: "Cursor",
+			Provider: "openai", Model: "gpt-5.3-codex-spark", Display: "GPT-5.3 Codex Spark",
 			ToolVersion: "test", RanAt: "2026-06-12T11:00:00Z", Executed: true,
 			TimeoutSeconds: 600, Pricing: nil, // explicit null in the file
 		},

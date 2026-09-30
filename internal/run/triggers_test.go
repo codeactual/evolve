@@ -205,7 +205,7 @@ func TestTriggersWritesResults(t *testing.T) {
 
 func TestTriggersWithoutCountingCapability(t *testing.T) {
 	repo := triggerRepoFixture(t)
-	opts := triggerOptions(t, repo, &fakeTriggerProvider{}) // cursor-like: no counting, no pricing
+	opts := triggerOptions(t, repo, &fakeTriggerProvider{}) // no counting API, no pricing
 
 	if _, err := Triggers(context.Background(), opts); err != nil {
 		t.Fatal(err)

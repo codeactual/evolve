@@ -84,15 +84,11 @@ const (
 	stderrTailBytes = 4096
 	maxStdoutBytes  = 32 << 20 // collect mode cap; the stream keeps draining past it
 	waitDelay       = 5 * time.Second
-	// sideHitPoll is how often SideHit is checked while waiting for stdout.
-	// Short enough that a PreToolUse hook marker cancels within a fraction of a
-	// second; long enough to avoid a busy loop.
-	sideHitPoll = 50 * time.Millisecond
 )
 
 // Result is the outcome of one agent run.
 type Result struct {
-	Hit        bool          // scan mode: OnLine or SideHit reported a hit
+	Hit        bool          // scan mode: OnLine reported a hit
 	Stdout     []byte        // collect mode: full stdout (bounded)
 	TimedOut   bool          // the per-run timeout expired
 	ExitCode   int           // process exit code (-1 when killed)
@@ -101,17 +97,15 @@ type Result struct {
 }
 
 // Scan configures scan-mode early-exit for trigger runs. A nil *Scan collects
-// stdout (eval mode). OnLine inspects each stdout line; SideHit is polled on a
-// short interval for out-of-band signals (e.g. a Grok PreToolUse hit file).
-// Either returning true ends the run early with Hit=true.
+// stdout (eval mode). OnLine inspects each stdout line; returning true ends the
+// run early with Hit=true.
 type Scan struct {
-	OnLine  func([]byte) bool
-	SideHit func() bool
+	OnLine func([]byte) bool
 }
 
 // scanning reports whether this Scan is in scan mode (vs collect).
 func (s *Scan) scanning() bool {
-	return s != nil && (s.OnLine != nil || s.SideHit != nil)
+	return s != nil && s.OnLine != nil
 }
 
 // Exec runs commands for real.
@@ -123,8 +117,8 @@ type Exec struct {
 }
 
 // Run executes spec with the given timeout. A nil scan collects stdout into
-// Result.Stdout. A non-nil scan inspects stdout (OnLine) and/or a side channel
-// (SideHit); the first true ends the run early with Hit=true. A timed-out run
+// Result.Stdout. A non-nil scan inspects stdout (OnLine); the first true ends
+// the run early with Hit=true. A timed-out run
 // is not an error: it returns TimedOut=true with whatever output arrived, so
 // trigger runs count as no-trigger and case runs grade partial output. The
 // returned error is non-nil only for unstartable commands or parent-context
@@ -222,9 +216,8 @@ func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Dur
 }
 
 // scanStdout reads agent stdout in scan mode until EOF, a hit, or context
-// cancel. OnLine sees each line; SideHit is polled so out-of-band markers can
-// kill the process even when the stream is quiet. After a hit, remaining
-// stdout is drained so Wait can return.
+// cancel. OnLine sees each line. After a hit, remaining stdout is drained so
+// Wait can return.
 func scanStdout(runCtx context.Context, cancel context.CancelFunc, stdout io.Reader, scan *Scan) bool {
 	type readEv struct {
 		line []byte
@@ -243,14 +236,6 @@ func scanStdout(runCtx context.Context, cancel context.CancelFunc, stdout io.Rea
 		}
 	}()
 
-	var ticker *time.Ticker
-	var tick <-chan time.Time
-	if scan.SideHit != nil {
-		ticker = time.NewTicker(sideHitPoll)
-		defer ticker.Stop()
-		tick = ticker.C
-	}
-
 	hit := false
 	for {
 		select {
@@ -263,11 +248,6 @@ func scanStdout(runCtx context.Context, cancel context.CancelFunc, stdout io.Rea
 				return hit
 			}
 			// After hit, keep draining until err.
-		case <-tick:
-			if !hit && scan.SideHit != nil && scan.SideHit() {
-				hit = true
-				cancel()
-			}
 		case <-runCtx.Done():
 			// Timeout or early-hit cancel: drain until the pipe closes so Wait
 			// is not blocked on a full buffer. Ignore further hits.

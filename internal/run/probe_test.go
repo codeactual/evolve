@@ -43,15 +43,16 @@ func onPathBase(t *testing.T) harness.Harness {
 
 func TestProbeOfferedModels(t *testing.T) {
 	base := onPathBase(t)
+	nonOffering := &fakeTriggerProvider{} // no OfferedModels capability
 	hs := []harness.Harness{
 		listingHarness{Harness: base, offered: []string{"Sonnet 5"}},
-		harness.NewGemini(), // no OfferedModels capability
+		nonOffering,
 	}
 	got := ProbeOfferedModels(t.Context(), &runner.Exec{}, hs, time.Second)
 	if !slices.Equal(got[base.ID()], []string{"Sonnet 5"}) {
 		t.Errorf("offered[%s] = %v, want [Sonnet 5]", base.ID(), got[base.ID()])
 	}
-	if _, ok := got[harness.NewGemini().ID()]; ok {
+	if _, ok := got[nonOffering.ID()]; ok {
 		t.Error("harness without the capability should be absent (unknown)")
 	}
 }
