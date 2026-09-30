@@ -29,8 +29,12 @@ func discovered(provider, id, name string) model.Model {
 func reload(t *testing.T, dir string) []model.Model {
 	t.Helper()
 	o := &Options{Viper: viper.New(), Root: dir}
-	if err := readConfigFile(o.Viper, dir); err != nil {
-		t.Fatalf("readConfigFile: %v", err)
+	path, err := FindConfigFile(dir)
+	if err != nil || path == "" {
+		t.Fatalf("FindConfigFile(%s) = %q, %v; want the injected config", dir, path, err)
+	}
+	if err := readConfigPath(o.Viper, path); err != nil {
+		t.Fatalf("readConfigPath: %v", err)
 	}
 	models, err := o.AvailableModels()
 	if err != nil {

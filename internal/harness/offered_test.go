@@ -73,10 +73,11 @@ func TestClaudeListOfferedModels(t *testing.T) {
 		if done != nil {
 			t.Error("claude probe passed a done predicate; its CLI exits on its own")
 		}
-		if len(spec.Argv) == 3 { // claude -p /model
+		i := slices.Index(spec.Argv, "--model")
+		if i < 0 { // the base `claude -p /model` probe
 			return []byte(claudeModelUsage), nil
 		}
-		alias := spec.Argv[len(spec.Argv)-1]
+		alias := spec.Argv[i+1]
 		out, ok := resolutions[alias]
 		if !ok {
 			t.Errorf("unexpected alias resolved: %q", alias)

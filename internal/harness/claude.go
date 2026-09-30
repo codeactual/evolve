@@ -378,9 +378,12 @@ func (c *Claude) ListOfferedModels(ctx context.Context, probe ProbeExec) ([]stri
 
 // claudeProbeSpec builds the client-side "/model" probe invocation, optionally
 // pinning an alias to resolve. DISABLE_AUTOUPDATER keeps the probe from
-// kicking off an update check; everything else uses the operator's config.
+// kicking off an update check; it otherwise uses the operator's config.
+// --setting-sources user and --strict-mcp-config keep any project settings
+// (hooks) and MCP servers of the directory it runs in from loading, so a
+// hostile repository cannot execute code through the probe.
 func claudeProbeSpec(alias string) model.CommandSpec {
-	argv := []string{"claude", "-p", "/model"}
+	argv := []string{"claude", "-p", "/model", "--setting-sources", "user", "--strict-mcp-config"}
 	if alias != "" {
 		argv = append(argv, "--model", alias)
 	}

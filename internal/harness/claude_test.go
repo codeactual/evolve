@@ -201,3 +201,19 @@ func derefInt(p *int) int {
 	}
 	return *p
 }
+
+// TestClaudeProbeSpecIgnoresProjectSettingsAndMCP pins that the offered-models
+// probe never loads project settings (hooks) or MCP servers: a headless
+// `claude -p` would otherwise run a repository's hooks and connect its
+// .mcp.json servers without a trust prompt.
+func TestClaudeProbeSpecIgnoresProjectSettingsAndMCP(t *testing.T) {
+	for _, alias := range []string{"", "sonnet"} {
+		spec := claudeProbeSpec(alias)
+		if !containsPair(spec.Argv, "--setting-sources", "user") {
+			t.Errorf("claudeProbeSpec(%q) lacks --setting-sources user: %v", alias, spec.Argv)
+		}
+		if !slices.Contains(spec.Argv, "--strict-mcp-config") {
+			t.Errorf("claudeProbeSpec(%q) lacks --strict-mcp-config: %v", alias, spec.Argv)
+		}
+	}
+}

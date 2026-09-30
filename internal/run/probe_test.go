@@ -124,3 +124,49 @@ func TestProbeExecUnfinishedProtocolErrors(t *testing.T) {
 		t.Error("probe that never saw its response should error, not return partial output")
 	}
 }
+
+// TestProbeExecRunsInFreshEmptyDir pins that every probe runs from its own
+// empty temp directory — never the process cwd (normally the repository under
+// test, whose project hooks and MCP servers a headless claude would load) — and
+// that the directory is gone afterward.
+func TestProbeExecRunsInFreshEmptyDir(t *testing.T) {
+	h := onPathBase(t)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seenDir string
+	var entries []os.DirEntry
+	rec := probeRunnerFunc(func(_ context.Context, spec model.CommandSpec, _ time.Duration,
+		_ *runner.Scan,
+	) (runner.Result, error) {
+		seenDir = spec.Dir
+		entries, _ = os.ReadDir(spec.Dir)
+		return runner.Result{Stdout: []byte("ok")}, nil
+	})
+	exec := probeExec(rec, h, time.Second)
+	if _, err := exec(t.Context(), model.CommandSpec{Argv: []string{"claude", "-p", "/model"}}, nil); err != nil {
+		t.Fatalf("probeExec: %v", err)
+	}
+	if seenDir == "" {
+		t.Fatal("probe ran with an empty Dir (inherits the process cwd)")
+	}
+	if seenDir == cwd || strings.HasPrefix(cwd, seenDir+string(os.PathSeparator)) {
+		t.Errorf("probe Dir = %q, must not be the process cwd %q or an ancestor of it", seenDir, cwd)
+	}
+	if len(entries) != 0 {
+		t.Errorf("probe Dir held %d entries while running, want a fresh empty dir", len(entries))
+	}
+	if _, err := os.Stat(seenDir); !os.IsNotExist(err) {
+		t.Errorf("probe Dir %q still exists after the probe (err=%v)", seenDir, err)
+	}
+}
+
+// probeRunnerFunc adapts a function to the probeRunner interface.
+type probeRunnerFunc func(context.Context, model.CommandSpec, time.Duration, *runner.Scan) (runner.Result, error)
+
+func (f probeRunnerFunc) Run(ctx context.Context, spec model.CommandSpec, timeout time.Duration,
+	scan *runner.Scan,
+) (runner.Result, error) {
+	return f(ctx, spec, timeout, scan)
+}
