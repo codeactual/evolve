@@ -278,3 +278,39 @@ func TestClaudeProbeSpecIgnoresProjectSettingsAndMCP(t *testing.T) {
 		}
 	}
 }
+
+// TestClaudeEnvCredentials pins the agent process's credential environment: only
+// the variables the claude CLI itself reads are forwarded, and only when set in
+// the parent. It also pins that CLAUDE_CODE_SUBPROCESS_ENV_SCRUB stays unset:
+// claude 2.1.285 forces the permission mode to default when it is set, which
+// would end the prompts-off eval posture (see claudeEnv).
+func TestClaudeEnvCredentials(t *testing.T) {
+	for _, k := range []string{"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN", "EVOLVE_ANTHROPIC_API_KEY", "GITHUB_TOKEN"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	env, _ := claudeEnv(t.TempDir())
+	for _, e := range env {
+		if strings.HasPrefix(e, "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=") {
+			t.Errorf("env sets %q: it forces Claude's permission mode to default and ends the prompts-off posture", e)
+		}
+		for _, unwanted := range []string{"ANTHROPIC_API_KEY=", "CLAUDE_CODE_OAUTH_TOKEN=", "ANTHROPIC_AUTH_TOKEN=", "GITHUB_TOKEN=", "EVOLVE_"} {
+			if strings.HasPrefix(e, unwanted) {
+				t.Errorf("unset credential leaked into env as %q", e)
+			}
+		}
+	}
+
+	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+	t.Setenv("EVOLVE_ANTHROPIC_API_KEY", "counting-only")
+	t.Setenv("GITHUB_TOKEN", "ghp_unrelated")
+	env, _ = claudeEnv(t.TempDir())
+	if !slices.Contains(env, "ANTHROPIC_API_KEY=sk-ant-test") {
+		t.Errorf("a set ANTHROPIC_API_KEY must be forwarded to the CLI: %v", env)
+	}
+	for _, e := range env {
+		if strings.HasPrefix(e, "EVOLVE_") || strings.HasPrefix(e, "GITHUB_TOKEN=") {
+			t.Errorf("env forwards %q, which the claude CLI does not read", e)
+		}
+	}
+}

@@ -133,3 +133,54 @@ func TestCodexEvalSpecNetworkAccessOptIn(t *testing.T) {
 		t.Errorf("eval argv lacks network_access=true after the opt-in: %v", spec.Argv)
 	}
 }
+
+// TestCodexEnvCredentials pins that only the credential variables the codex CLI
+// reads are forwarded, and only when set in the parent.
+func TestCodexEnvCredentials(t *testing.T) {
+	for _, k := range []string{"OPENAI_API_KEY", "CODEX_API_KEY", "EVOLVE_OPENAI_API_KEY", "GITHUB_TOKEN"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("CODEX_HOME", t.TempDir())
+	env, _ := codexEnv(t.TempDir())
+	for _, e := range env {
+		for _, unwanted := range []string{"OPENAI_API_KEY=", "CODEX_API_KEY=", "GITHUB_TOKEN=", "EVOLVE_"} {
+			if strings.HasPrefix(e, unwanted) {
+				t.Errorf("unset credential leaked into env as %q", e)
+			}
+		}
+	}
+
+	t.Setenv("OPENAI_API_KEY", "sk-test")
+	t.Setenv("CODEX_API_KEY", "codex-test")
+	t.Setenv("EVOLVE_OPENAI_API_KEY", "counting-only")
+	t.Setenv("GITHUB_TOKEN", "ghp_unrelated")
+	env, _ = codexEnv(t.TempDir())
+	for _, want := range []string{"OPENAI_API_KEY=sk-test", "CODEX_API_KEY=codex-test"} {
+		if !slices.Contains(env, want) {
+			t.Errorf("env lacks %q: %v", want, env)
+		}
+	}
+	for _, e := range env {
+		if strings.HasPrefix(e, "EVOLVE_") || strings.HasPrefix(e, "GITHUB_TOKEN=") {
+			t.Errorf("env forwards %q, which the codex CLI does not read", e)
+		}
+	}
+	if !slices.Contains(NewCodex().EnvKeys(), "CODEX_API_KEY") {
+		t.Errorf("EnvKeys = %v, want CODEX_API_KEY among the credential variables", NewCodex().EnvKeys())
+	}
+}
+
+// TestCodexSpecsEnableDefaultExcludes pins that both specs turn Codex's own
+// *KEY*/*SECRET*/*TOKEN* shell-environment excludes back on: Codex defaults
+// ignore_default_excludes to true, which leaves its shell commands the agent
+// process's whole environment, credentials included.
+func TestCodexSpecsEnableDefaultExcludes(t *testing.T) {
+	const flag = "shell_environment_policy.ignore_default_excludes=false"
+	trigger := NewCodex().TriggerSpec(t.TempDir(), "q", "gpt-5.5", model.InnerSandbox{})
+	eval := NewCodex().EvalSpec(t.TempDir(), model.EvalInput{Prompt: "p"}, "gpt-5.5")
+	for name, argv := range map[string][]string{"trigger": trigger.Argv, "eval": eval.Argv} {
+		if !containsPair(argv, "-c", flag) {
+			t.Errorf("%s argv lacks -c %s: %v", name, flag, argv)
+		}
+	}
+}

@@ -90,3 +90,15 @@ func sameFilePath(a, b string) bool {
 	}
 	return a == b
 }
+
+// forwardedEnv returns KEY=value entries for each of names that is set and
+// non-empty in this process's environment, in order.
+func forwardedEnv(names []string) []string {
+	var out []string
+	for _, name := range names {
+		if v := os.Getenv(name); v != "" {
+			out = append(out, name+"="+v)
+		}
+	}
+	return out
+}

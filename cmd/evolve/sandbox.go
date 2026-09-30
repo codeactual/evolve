@@ -45,6 +45,17 @@ func sandboxConfig(repoRoot string) runner.SandboxConfig {
 	return cfg
 }
 
+// sandboxEnvPassthrough is the operator's sandbox.env_passthrough: names of
+// environment variables, beyond the baseline, that agent processes may inherit
+// (GOPATH, GOFLAGS, a build-tool proxy setting, ...). Operator-only, like the
+// rest of the sandbox block.
+func sandboxEnvPassthrough() []string {
+	if opts.Viper == nil {
+		return nil
+	}
+	return opts.Viper.GetStringSlice("sandbox.env_passthrough")
+}
+
 // resolveSandbox builds the filesystem-confinement policy for agent runs. It is
 // on by default and deny-by-default: an agent sees only the system
 // directories, the repository under test (read-only), its own run directory, its

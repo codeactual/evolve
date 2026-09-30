@@ -50,7 +50,7 @@ var doctorCmd = &cobra.Command{
 		// account actually serves — the list the interactive form deselects
 		// against. Absent capability or a failed probe reads "unknown", the
 		// fail-open verdict.
-		offered := run.ProbeOfferedModels(cmd.Context(), &runner.Exec{}, harnesses,
+		offered := run.ProbeOfferedModels(cmd.Context(), &runner.Exec{InheritEnv: true}, harnesses,
 			offeredModelsProbeTimeout)
 		wm := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 		outln(wm, "\nHARNESS\tOFFERED MODELS")

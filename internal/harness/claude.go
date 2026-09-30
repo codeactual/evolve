@@ -97,16 +97,34 @@ const claudeConfigRel = ".evolve/claude-home"
 // ws at a throwaway workspace-rooted config dir, and the operator files the
 // run reads through that dir (the bridged credentials), which a sandboxed run
 // must bind read-only.
+//
+// Credentials are the one thing the agent process needs from the operator's
+// environment: only the variables the claude CLI itself reads are forwarded,
+// and only when set.
+//
+// CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, which would strip those credentials from
+// the tool subprocesses' environment, is deliberately NOT set: in claude 2.1.285
+// it forces the permission mode to default whatever --permission-mode says
+// (Claude Code's "allowed_non_write_users hardening"), which would end the
+// prompts-off eval posture and deny every tool the eval did not list in
+// --allowedTools. Verified live on 2026-09-30. A credential the operator
+// exports is therefore visible to Claude's shell commands; a file-based login
+// (the default) never reaches the environment at all.
 func claudeEnv(ws string) (env, readPaths []string) {
 	dir := isolatedDir(ws, claudeConfigRel)
 	if target := ensureClaudeConfig(dir); target != "" {
 		readPaths = append(readPaths, target)
 	}
-	return []string{
+	env = []string{
 		"CLAUDE_CONFIG_DIR=" + dir,
 		"DISABLE_AUTOUPDATER=1",
-	}, readPaths
+	}
+	return append(env, forwardedEnv(claudeCredentialEnv)...), readPaths
 }
+
+// claudeCredentialEnv are the variables the claude CLI reads to authenticate.
+// The EVOLVE_-prefixed keys are token-counting credentials and never reach it.
+var claudeCredentialEnv = []string{"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN"}
 
 // ensureClaudeConfig creates the isolated config dir, seeds the state file,
 // and links the operator's OAuth credentials: Claude keeps .credentials.json

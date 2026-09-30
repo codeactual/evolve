@@ -269,3 +269,26 @@ func TestLiveSandboxExposesBwrapFirstOnPath(t *testing.T) {
 			res.ExitCode, res.Stdout, res.StderrTail)
 	}
 }
+
+// TestLiveSandboxGitIdentityXDGWithAllowlist pins that the XDG git identity
+// still resolves once the environment allowlist is in force (XDG_CONFIG_HOME
+// must be on it), and that an unrelated secret in the parent environment never
+// reaches the sandboxed command.
+func TestLiveSandboxGitIdentityXDGWithAllowlist(t *testing.T) {
+	e := newLiveEnv(t, SandboxConfig{})
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	t.Setenv("GITHUB_TOKEN", "ghp_live_canary")
+	t.Setenv("EVOLVE_ANTHROPIC_API_KEY", "counting_canary")
+	mustFile(t, filepath.Join(xdg, "git", "config"), "[user]\n\temail = allow@example.test\n")
+	res := e.run(t, script(`git config user.email; env`))
+	out := string(res.Stdout)
+	if !strings.Contains(out, "allow@example.test") {
+		t.Errorf("git config user.email = %q, want the XDG identity with the allowlist in force", out)
+	}
+	for _, leaked := range []string{"GITHUB_TOKEN", "ghp_live_canary", "EVOLVE_ANTHROPIC_API_KEY", "counting_canary"} {
+		if strings.Contains(out, leaked) {
+			t.Errorf("the sandboxed environment contains %q, want it dropped:\n%s", leaked, out)
+		}
+	}
+}

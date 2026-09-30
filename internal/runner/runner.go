@@ -115,6 +115,13 @@ type Exec struct {
 	// the command in an OS sandbox. The zero value is disabled, so callers and
 	// tests that build Exec{} run unconfined as before.
 	Sandbox Sandbox
+	// InheritEnv passes the operator's whole environment to the command instead
+	// of the allowlist (see buildEnv). Only the operator-context probes set it:
+	// they read the operator's real CLI configuration and run no untrusted input.
+	InheritEnv bool
+	// EnvPassthrough names additional parent environment variables to pass
+	// through (the operator's sandbox.env_passthrough).
+	EnvPassthrough []string
 }
 
 // Run executes spec with the given timeout. A nil scan collects stdout into
@@ -146,13 +153,7 @@ func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Dur
 
 	cmd := exec.CommandContext(runCtx, argv[0], argv[1:]...)
 	cmd.Dir = spec.Dir
-	cmd.Env = append(os.Environ(), spec.Env...)
-	if e.Sandbox.Enabled {
-		// The host's TMPDIR path is not mounted: point temp files at the
-		// sandbox's own tmpfs. The validated bubblewrap is exposed first on PATH
-		// so the agent CLIs' own nested sandboxes use it (see sandboxBinDir).
-		cmd.Env = append(cmd.Env, "TMPDIR=/tmp", "PATH="+sandboxBinDir+":"+lastEnv(cmd.Env, "PATH"))
-	}
+	cmd.Env = buildEnv(os.Environ(), spec.Env, e.InheritEnv, e.EnvPassthrough, e.Sandbox.Enabled)
 	if spec.Stdin != nil {
 		cmd.Stdin = bytes.NewReader(spec.Stdin)
 	}
@@ -297,16 +298,4 @@ func (r *ring) Write(p []byte) (int, error) {
 
 func (r *ring) String() string {
 	return strings.TrimSpace(string(r.buf))
-}
-
-// lastEnv returns the value of the last key=value entry for key in env (what
-// exec honors when a key repeats), or "" when absent.
-func lastEnv(env []string, key string) string {
-	value := ""
-	for _, kv := range env {
-		if v, ok := strings.CutPrefix(kv, key+"="); ok {
-			value = v
-		}
-	}
-	return value
 }

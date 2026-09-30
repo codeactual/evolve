@@ -214,7 +214,7 @@ func uiRun(cmd *cobra.Command, sweep *SweepFlags, def plan.Tiers,
 	offered := map[string][]string{}
 	if len(sweep.Models) == 0 {
 		probeCtx, cancelProbe := context.WithTimeout(cmd.Context(), offeredModelsProbeTimeout)
-		offered = run.ProbeOfferedModels(probeCtx, &runner.Exec{}, harnesses, offeredModelsProbeTimeout)
+		offered = run.ProbeOfferedModels(probeCtx, &runner.Exec{InheritEnv: true}, harnesses, offeredModelsProbeTimeout)
 		cancelProbe()
 	}
 	var hstates []plan.HarnessState

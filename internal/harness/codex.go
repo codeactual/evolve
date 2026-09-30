@@ -26,7 +26,7 @@ func NewCodex() *Codex {
 		id:        model.HarnessCodex,
 		name:      "OpenAI Codex",
 		clis:      []string{"codex"},
-		envKeys:   []string{"EVOLVE_OPENAI_API_KEY", "OPENAI_API_KEY"},
+		envKeys:   []string{"EVOLVE_OPENAI_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY"},
 		skillDirs: []string{filepath.Join(".agents", "skills")},
 	}}
 }
@@ -41,13 +41,27 @@ const codexHomeRel = ".evolve/codex-home"
 // isolated CODEX_HOME with the operator's auth bridged in, and the operator
 // files the run reads through that home (the bridged auth.json), which a
 // sandboxed run must bind read-only.
+//
+// Only the credential variables the codex CLI itself reads are forwarded from
+// the operator's environment, and only when set; the EVOLVE_-prefixed
+// token-counting keys never reach it. The specs also set Codex's
+// shell_environment_policy.ignore_default_excludes=false so its own shell
+// commands do not inherit those credentials (see codexShellEnvPolicy).
 func codexEnv(ws string) (env, readPaths []string) {
 	home := isolatedDir(ws, codexHomeRel)
 	if target := ensureCodexHome(home); target != "" {
 		readPaths = append(readPaths, target)
 	}
-	return []string{"CODEX_HOME=" + home}, readPaths
+	return append([]string{"CODEX_HOME=" + home}, forwardedEnv(codexCredentialEnv)...), readPaths
 }
+
+// codexCredentialEnv are the variables the codex CLI reads to authenticate.
+var codexCredentialEnv = []string{"OPENAI_API_KEY", "CODEX_API_KEY"}
+
+// codexShellEnvPolicy turns Codex's default *KEY*/*SECRET*/*TOKEN* excludes for
+// its shell commands back on: ignore_default_excludes defaults to true, which
+// leaves those commands the agent process's whole environment.
+var codexShellEnvPolicy = []string{"-c", "shell_environment_policy.ignore_default_excludes=false"}
 
 // ensureCodexHome creates the isolated home, links the operator's auth.json,
 // and carries over the credential-store selection. It returns the real path of
@@ -98,6 +112,7 @@ func (c *Codex) TriggerSpec(ws, query, cliModelID string, _ model.InnerSandbox) 
 		"codex", "exec", query, "--json", "--skip-git-repo-check", "-m", cliModelID,
 		"--sandbox", "read-only",
 	}
+	argv = append(argv, codexShellEnvPolicy...)
 	env, readPaths := codexEnv(ws)
 	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }
@@ -122,6 +137,7 @@ func (c *Codex) EvalSpec(ws string, in model.EvalInput, cliModelID string) model
 			"--json", "--skip-git-repo-check",
 			"--sandbox", "workspace-write",
 			"-c", "sandbox_workspace_write.network_access=" + strconv.FormatBool(in.InnerSandbox.CodexNetworkAccess),
+			"-c", "shell_environment_policy.ignore_default_excludes=false",
 			"-m", cliModelID,
 		},
 		Dir:       ws,

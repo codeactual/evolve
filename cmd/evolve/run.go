@@ -231,7 +231,7 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 		Repo:           repo,
 		Selected:       selected,
 		Counter:        counter,
-		Runner:         &runner.Exec{Sandbox: sandbox},
+		Runner:         &runner.Exec{Sandbox: sandbox, EnvPassthrough: sandboxEnvPassthrough()},
 		InnerSandbox:   inner,
 		PluginFilter:   f.Plugin,
 		SkillFilter:    f.Skill,
