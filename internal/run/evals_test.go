@@ -84,7 +84,7 @@ func (f *fakeEvalProvider) canonicalModel() model.Model {
 	return m
 }
 
-func (f *fakeEvalProvider) TriggerSpec(ws, query, _ string, _ bool) model.CommandSpec {
+func (f *fakeEvalProvider) TriggerSpec(ws, query, _ string, _ model.InnerSandbox) model.CommandSpec {
 	return model.CommandSpec{Argv: []string{"fake-cli", query}, Dir: ws}
 }
 func (f *fakeEvalProvider) ScanLine([]byte, string, string) (bool, string) { return false, "" }

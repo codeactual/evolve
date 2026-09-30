@@ -85,13 +85,8 @@ const DefaultMaxTurns = 20
 type EvalInput struct {
 	Prompt   string
 	MaxTurns int // 0 = the harness default (DefaultMaxTurns)
-	// HostSandboxed reports that evolve already confines this run in its own OS
-	// sandbox. Harnesses whose agent CLI applies its own OS sandbox must then
-	// disable it: macOS Seatbelt (and the Linux equivalents) cannot nest, so a
-	// second sandbox layer aborts every shell command the agent runs. When
-	// false, evolve runs unconfined and the agent's own sandbox is the sole
-	// protection, so it is left enabled.
-	HostSandboxed bool
+	// InnerSandbox configures the agent CLI's own sandbox, which is always on.
+	InnerSandbox InnerSandbox
 }
 
 // DefaultJudgeMaxTurns is the agent-turn ceiling for an LLM-judge session on

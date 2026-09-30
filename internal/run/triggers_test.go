@@ -55,7 +55,7 @@ func (f *fakeTriggerProvider) canonicalModel() model.Model {
 	return m
 }
 
-func (f *fakeTriggerProvider) TriggerSpec(ws, query, _ string, _ bool) model.CommandSpec {
+func (f *fakeTriggerProvider) TriggerSpec(ws, query, _ string, _ model.InnerSandbox) model.CommandSpec {
 	return model.CommandSpec{Argv: []string{"fake-cli", query}, Dir: ws}
 }
 

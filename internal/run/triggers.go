@@ -305,7 +305,7 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 		for range opts.Runs {
 			g.Go(func() error {
 				cliModelID, _ := sel.Model.CLIModelID(sel.Harness.ID())
-				spec := sel.Harness.TriggerSpec(ws, t.Query, cliModelID, opts.HostSandboxed)
+				spec := sel.Harness.TriggerSpec(ws, t.Query, cliModelID, opts.InnerSandbox)
 				spec.Argv[0] = cli
 				scan := &runner.Scan{
 					OnLine: func(line []byte) bool {

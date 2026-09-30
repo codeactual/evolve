@@ -23,9 +23,9 @@ type Harness interface {
 	SkillDirs() []string
 	// TriggerSpec builds the headless command for one trigger query. cliModelID
 	// is the harness-specific model id (already mapped from the canonical model).
-	// hostSandboxed: when set, the harness must disable the agent CLI's own OS
-	// sandbox so it does not nest illegally inside evolve's.
-	TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) model.CommandSpec
+	// inner configures the agent CLI's own sandbox, which is always on: layered
+	// inside evolve's outer sandbox.
+	TriggerSpec(ws, query, cliModelID string, inner model.InnerSandbox) model.CommandSpec
 	// ScanLine inspects one stdout line for activation of skill. workDir is the
 	// agent command's working directory (CommandSpec.Dir); harnesses that keep
 	// side state under the workspace use it, others ignore it. A non-empty note
@@ -37,8 +37,8 @@ type Harness interface {
 // implement it only when their CLI supports a gradable headless run; engines
 // type-assert and degrade for those that do not. The LLM judge reuses
 // EvalSpec at the judge turn ceiling (model.DefaultJudgeMaxTurns): its
-// confinement is evolve's OS sandbox (or the harness's own eval sandbox when
-// not host-sandboxed), never a judge-specific tool allowlist.
+// confinement is evolve's OS sandbox plus the agent CLI's own, never a
+// judge-specific tool allowlist.
 type EvalRunner interface {
 	EvalSpec(ws string, c model.EvalInput, cliModelID string) model.CommandSpec
 	// ParseEvalOutput extracts the final assistant text and measured usage from

@@ -446,9 +446,9 @@ func runEval(ctx context.Context, opts EvalOptions, sel harness.Selection, ref p
 	}
 	cliModelID, _ := sel.Model.CLIModelID(sel.Harness.ID())
 	spec := evalRunner.EvalSpec(ws, model.EvalInput{
-		Prompt:        c.Prompt,
-		MaxTurns:      maxTurns,
-		HostSandboxed: opts.HostSandboxed,
+		Prompt:       c.Prompt,
+		MaxTurns:     maxTurns,
+		InnerSandbox: opts.InnerSandbox,
 	}, cliModelID)
 	spec.Argv[0] = cli
 

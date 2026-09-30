@@ -40,14 +40,52 @@ func NewClaude() *Claude {
 	}}
 }
 
-// claudeSandboxOff disables Claude Code's own Bash-tool OS sandbox via an inline
-// settings override. evolve confines the whole `claude` process in its own
-// sandbox, and Claude's Bash sandbox uses macOS Seatbelt, which cannot nest — so
-// without this every Bash command in the agent dies with "Operation not
-// permitted". It is passed only when evolve's sandbox is active (HostSandboxed);
-// with evolve unconfined, Claude keeps its own sandbox. A managed-settings.json
-// that forces the sandbox on still wins, so those hosts must use --no-sandbox.
-const claudeSandboxOff = `{"sandbox":{"enabled":false}}`
+// claudeSandboxSettings renders the inline --settings JSON that turns Claude
+// Code's own Bash-tool OS sandbox on, fail-closed, inside evolve's outer
+// sandbox (the layers nest on Linux, where both use bubblewrap):
+//
+//   - enabled turns the sandbox on. It is off by default, and evolve's isolated
+//     CLAUDE_CONFIG_DIR hides the operator's user settings, so without this
+//     Claude would never sandbox Bash under evolve.
+//   - failIfUnavailable makes a sandbox that cannot start (no bubblewrap or
+//     socat, or no nested user namespaces) an error instead of a warning.
+//   - allowUnsandboxedCommands=false removes the dangerouslyDisableSandbox
+//     retry that would let a command run outside it.
+//   - network.allowedDomains lists the hosts Bash commands may reach; empty
+//     means none. The sandbox runtime (srt) cannot express "allow all".
+//   - network.strictAllowlist denies any other host deterministically: a
+//     headless run cannot answer the approval prompt srt would otherwise raise.
+//
+// Keys verified 2026-09-30 against the settings schema embedded in claude
+// 2.1.285 (the Zod definitions in its binary: each description names --settings
+// as a honored source for strictAllowlist and allowUnsandboxedCommands) and the
+// sandboxing docs at https://code.claude.com/docs/en/sandboxing.
+func claudeSandboxSettings(in model.InnerSandbox) string {
+	type network struct {
+		AllowedDomains  []string `json:"allowedDomains"`
+		StrictAllowlist bool     `json:"strictAllowlist"`
+	}
+	type sandbox struct {
+		Enabled                  bool    `json:"enabled"`
+		FailIfUnavailable        bool    `json:"failIfUnavailable"`
+		AllowUnsandboxedCommands bool    `json:"allowUnsandboxedCommands"`
+		Network                  network `json:"network"`
+	}
+	domains := in.ClaudeAllowedDomains
+	if domains == nil {
+		domains = []string{} // marshal as [], never null
+	}
+	out, err := json.Marshal(struct {
+		Sandbox sandbox `json:"sandbox"`
+	}{sandbox{
+		Enabled: true, FailIfUnavailable: true, AllowUnsandboxedCommands: false,
+		Network: network{AllowedDomains: domains, StrictAllowlist: true},
+	}})
+	if err != nil { // plain strings and bools: cannot happen
+		panic(err)
+	}
+	return string(out)
+}
 
 // claudeConfigRel is the workspace-relative CLAUDE_CONFIG_DIR evolve gives the
 // claude CLI. Sessions, project history, and auto-memory live here so runs do
@@ -98,7 +136,7 @@ func seedClaudeState(dir string) {
 }
 
 // TriggerSpec builds the headless `claude -p` command for one trigger query.
-func (c *Claude) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) model.CommandSpec {
+func (c *Claude) TriggerSpec(ws, query, cliModelID string, inner model.InnerSandbox) model.CommandSpec {
 	argv := []string{
 		"claude", "-p", query,
 		"--model", cliModelID,
@@ -106,9 +144,7 @@ func (c *Claude) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) m
 		"--verbose",
 		"--max-turns", "2",
 		"--allowedTools", "Skill Read",
-	}
-	if hostSandboxed {
-		argv = append(argv, "--settings", claudeSandboxOff)
+		"--settings", claudeSandboxSettings(inner),
 	}
 	env, readPaths := claudeEnv(ws)
 	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
@@ -218,8 +254,9 @@ func (c *Claude) ScanLine(line []byte, skill, _ string) (bool, string) {
 
 // EvalSpec runs claude with permissions bypassed: evals grade what the agent
 // builds, not what a tool allowlist happens to permit, and confinement comes
-// from the sandbox (evolve's when HostSandboxed, Claude Code's own Bash
-// sandbox otherwise) rather than from permission prompts.
+// from the layered sandboxes (evolve's outer one, and Claude Code's own Bash
+// sandbox inside it, see claudeSandboxSettings) rather than from permission
+// prompts.
 func (c *Claude) EvalSpec(ws string, in model.EvalInput, cliModelID string) model.CommandSpec {
 	maxTurns := in.MaxTurns
 	if maxTurns == 0 {
@@ -232,9 +269,7 @@ func (c *Claude) EvalSpec(ws string, in model.EvalInput, cliModelID string) mode
 		"--verbose",
 		"--max-turns", strconv.Itoa(maxTurns),
 		"--permission-mode", "bypassPermissions",
-	}
-	if in.HostSandboxed {
-		argv = append(argv, "--settings", claudeSandboxOff)
+		"--settings", claudeSandboxSettings(in.InnerSandbox),
 	}
 	env, readPaths := claudeEnv(ws)
 	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}

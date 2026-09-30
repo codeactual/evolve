@@ -21,17 +21,17 @@ import (
 // ceiling and parsed by its ParseEvalOutput. Stateless per call, so safe under
 // the sweep's eval concurrency.
 type HarnessJudge struct {
-	sel           harness.Selection
-	eval          harness.EvalRunner
-	cli           string
-	runner        Runner
-	hostSandboxed bool
+	sel          harness.Selection
+	eval         harness.EvalRunner
+	cli          string
+	runner       Runner
+	innerSandbox model.InnerSandbox
 }
 
 // NewHarnessJudge binds a resolved judge selection to an executor. It errors
 // when the harness lacks eval support or its CLI is not on PATH — resolution failures surface at command start, never
 // per-assertion.
-func NewHarnessJudge(sel harness.Selection, r Runner, hostSandboxed bool) (*HarnessJudge, error) {
+func NewHarnessJudge(sel harness.Selection, r Runner, inner model.InnerSandbox) (*HarnessJudge, error) {
 	eval, ok := sel.Harness.(harness.EvalRunner)
 	if !ok {
 		return nil, fmt.Errorf("judge harness %s cannot run headless judge sessions", sel.Harness.ID())
@@ -40,7 +40,7 @@ func NewHarnessJudge(sel harness.Selection, r Runner, hostSandboxed bool) (*Harn
 	if !ok {
 		return nil, fmt.Errorf("judge harness %s: CLI not found on PATH", sel.Harness.ID())
 	}
-	return &HarnessJudge{sel: sel, eval: eval, cli: cli, runner: r, hostSandboxed: hostSandboxed}, nil
+	return &HarnessJudge{sel: sel, eval: eval, cli: cli, runner: r, innerSandbox: inner}, nil
 }
 
 // Judge runs one judge session in ws — the session grades all of a case's llm
@@ -51,9 +51,9 @@ func NewHarnessJudge(sel harness.Selection, r Runner, hostSandboxed bool) (*Harn
 func (j *HarnessJudge) Judge(ctx context.Context, ws, prompt string, timeout time.Duration) (string, error) {
 	cliModelID, _ := j.sel.Model.CLIModelID(j.sel.Harness.ID())
 	spec := j.eval.EvalSpec(ws, model.EvalInput{
-		Prompt:        prompt,
-		MaxTurns:      model.DefaultJudgeMaxTurns,
-		HostSandboxed: j.hostSandboxed,
+		Prompt:       prompt,
+		MaxTurns:     model.DefaultJudgeMaxTurns,
+		InnerSandbox: j.innerSandbox,
 	}, cliModelID)
 	spec.Argv[0] = j.cli
 	res, err := j.runner.Run(ctx, spec, timeout, nil)

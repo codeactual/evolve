@@ -150,6 +150,17 @@ smoke:
 	@command -v claude >/dev/null 2>&1 || { echo "smoke: claude CLI not found in PATH" >&2; exit 2; }
 	SMOKE_MODEL="$${SMOKE_MODEL:-claude-haiku-4-5}" go -C e2e test -v -count=1 -run '^TestSmoke$$' .
 
+# The credentialed live tests: the real claude and codex CLIs inside evolve's
+# real sandbox. They cost money and need both CLIs logged in, so they are not
+# part of `ci`. EVOLVE_LIVE_BWRAP must name a bubblewrap copy that AppArmor does
+# not profile (on Ubuntu 24.04+ a bubblewrap launched from /usr/bin/bwrap cannot
+# nest): a root- or operator-owned copy in a directory with no group- or
+# other-writable ancestor, e.g. ~/.cache/evolve-live-bwrap/bwrap at mode 0755.
+.PHONY: live
+live:
+	@test -n "$${EVOLVE_LIVE_BWRAP:-}" || { echo "live: set EVOLVE_LIVE_BWRAP to an unprofiled bubblewrap copy (see the comment above this target)" >&2; exit 2; }
+	CGO_ENABLED=1 go test -tags live -count=1 -v -timeout 30m -run '^TestLive' ./internal/...
+
 .PHONY: ci
 ci: no-make-warnings vet imports-check go-gofumpt-check test go-cyclo-gate go-ineffassign go-errcheck go-staticcheck go-revive go-fix-check build
 

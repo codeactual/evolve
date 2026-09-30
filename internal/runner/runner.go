@@ -149,8 +149,9 @@ func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Dur
 	cmd.Env = append(os.Environ(), spec.Env...)
 	if e.Sandbox.Enabled {
 		// The host's TMPDIR path is not mounted: point temp files at the
-		// sandbox's own tmpfs.
-		cmd.Env = append(cmd.Env, "TMPDIR=/tmp")
+		// sandbox's own tmpfs. The validated bubblewrap is exposed first on PATH
+		// so the agent CLIs' own nested sandboxes use it (see sandboxBinDir).
+		cmd.Env = append(cmd.Env, "TMPDIR=/tmp", "PATH="+sandboxBinDir+":"+lastEnv(cmd.Env, "PATH"))
 	}
 	if spec.Stdin != nil {
 		cmd.Stdin = bytes.NewReader(spec.Stdin)
@@ -296,4 +297,16 @@ func (r *ring) Write(p []byte) (int, error) {
 
 func (r *ring) String() string {
 	return strings.TrimSpace(string(r.buf))
+}
+
+// lastEnv returns the value of the last key=value entry for key in env (what
+// exec honors when a key repeats), or "" when absent.
+func lastEnv(env []string, key string) string {
+	value := ""
+	for _, kv := range env {
+		if v, ok := strings.CutPrefix(kv, key+"="); ok {
+			value = v
+		}
+	}
+	return value
 }

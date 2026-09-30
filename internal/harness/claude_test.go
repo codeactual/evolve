@@ -4,6 +4,7 @@
 package harness
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -60,12 +61,12 @@ func containsPair(argv []string, flag, value string) bool {
 }
 
 // TestClaudeEvalSpec locks in the bypass-permissions eval posture: no tool
-// allowlist, and Claude's own Bash sandbox disabled only when evolve's host
-// sandbox already confines the run (the two cannot nest).
+// allowlist, and always-on sandbox settings regardless of how evolve's own
+// sandbox is configured.
 func TestClaudeEvalSpec(t *testing.T) {
 	c := NewClaude()
 	ws := t.TempDir()
-	spec := c.EvalSpec(ws, model.EvalInput{Prompt: "fix it", HostSandboxed: true}, "opus")
+	spec := c.EvalSpec(ws, model.EvalInput{Prompt: "fix it"}, "opus")
 	if !containsPair(spec.Argv, "--permission-mode", "bypassPermissions") {
 		t.Errorf("want --permission-mode bypassPermissions: %v", spec.Argv)
 	}
@@ -75,16 +76,76 @@ func TestClaudeEvalSpec(t *testing.T) {
 	if !containsPair(spec.Argv, "--max-turns", "20") {
 		t.Errorf("want default max-turns 20: %v", spec.Argv)
 	}
-	if !containsPair(spec.Argv, "--settings", claudeSandboxOff) {
-		t.Errorf("want sandbox-off settings when host-sandboxed: %v", spec.Argv)
+	if !slices.Contains(spec.Argv, "--settings") {
+		t.Errorf("want always-on sandbox settings: %v", spec.Argv)
 	}
 
 	spec = c.EvalSpec(ws, model.EvalInput{Prompt: "x", MaxTurns: 5}, "opus")
 	if !containsPair(spec.Argv, "--max-turns", "5") {
 		t.Errorf("want max-turns 5: %v", spec.Argv)
 	}
-	if slices.Contains(spec.Argv, "--settings") {
-		t.Errorf("claude keeps its own sandbox when evolve is unconfined: %v", spec.Argv)
+}
+
+// claudeSettingsOf decodes the --settings JSON of an argv into its sandbox
+// block, failing the test when it is absent or malformed.
+func claudeSettingsOf(t *testing.T, argv []string) (sandbox struct {
+	Enabled                  bool `json:"enabled"`
+	FailIfUnavailable        bool `json:"failIfUnavailable"`
+	AllowUnsandboxedCommands bool `json:"allowUnsandboxedCommands"`
+	Network                  struct {
+		AllowedDomains  []string `json:"allowedDomains"`
+		StrictAllowlist bool     `json:"strictAllowlist"`
+	} `json:"network"`
+},
+) {
+	t.Helper()
+	i := slices.Index(argv, "--settings")
+	if i < 0 || i+1 >= len(argv) {
+		t.Fatalf("argv has no --settings: %v", argv)
+	}
+	var settings struct {
+		Sandbox json.RawMessage `json:"sandbox"`
+	}
+	if err := json.Unmarshal([]byte(argv[i+1]), &settings); err != nil {
+		t.Fatalf("--settings is not JSON: %v\n%s", err, argv[i+1])
+	}
+	if !strings.Contains(argv[i+1], `"allowedDomains":[`) {
+		t.Errorf("allowedDomains must serialize as an array, never null: %s", argv[i+1])
+	}
+	if err := json.Unmarshal(settings.Sandbox, &sandbox); err != nil {
+		t.Fatal(err)
+	}
+	return sandbox
+}
+
+func TestClaudeTriggerSpecSandboxSettings(t *testing.T) {
+	spec := NewClaude().TriggerSpec(t.TempDir(), "q", "opus", model.InnerSandbox{})
+	sb := claudeSettingsOf(t, spec.Argv)
+	if !sb.Enabled || !sb.FailIfUnavailable || sb.AllowUnsandboxedCommands || !sb.Network.StrictAllowlist {
+		t.Errorf("sandbox settings = %+v, want enabled, failIfUnavailable, no unsandboxed commands, strictAllowlist", sb)
+	}
+	if len(sb.Network.AllowedDomains) != 0 {
+		t.Errorf("allowedDomains = %v, want none by default", sb.Network.AllowedDomains)
+	}
+	// The trigger posture is unchanged around the settings.
+	if !containsPair(spec.Argv, "--allowedTools", "Skill Read") {
+		t.Errorf("trigger runs keep their Skill/Read allowlist: %v", spec.Argv)
+	}
+}
+
+func TestClaudeEvalSpecSandboxSettings(t *testing.T) {
+	inner := model.InnerSandbox{ClaudeAllowedDomains: []string{"proxy.golang.org", "*.npmjs.org"}}
+	spec := NewClaude().EvalSpec(t.TempDir(), model.EvalInput{Prompt: "p", InnerSandbox: inner}, "opus")
+	sb := claudeSettingsOf(t, spec.Argv)
+	if !sb.Enabled || !sb.FailIfUnavailable || sb.AllowUnsandboxedCommands {
+		t.Errorf("sandbox settings = %+v, want the fail-closed always-on settings", sb)
+	}
+	if !slices.Equal(sb.Network.AllowedDomains, inner.ClaudeAllowedDomains) {
+		t.Errorf("allowedDomains = %v, want %v verbatim", sb.Network.AllowedDomains, inner.ClaudeAllowedDomains)
+	}
+	// The eval keeps its prompts-off posture.
+	if !containsPair(spec.Argv, "--permission-mode", "bypassPermissions") {
+		t.Errorf("evals keep bypassPermissions: %v", spec.Argv)
 	}
 }
 

@@ -38,7 +38,7 @@ func fakeJudgeSelection() harness.Selection {
 
 func TestHarnessJudge(t *testing.T) {
 	r := &specRunner{result: runner.Result{Stdout: []byte(`{"verdicts": [{"id": 1, "passed": true}]}`)}}
-	j, err := NewHarnessJudge(fakeJudgeSelection(), r, true)
+	j, err := NewHarnessJudge(fakeJudgeSelection(), r, model.InnerSandbox{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestHarnessJudgeClaudePosture(t *testing.T) {
 	r := &specRunner{result: runner.Result{Stdout: []byte(`{"verdicts": [{"id": 1, "passed": true}]}`)}}
 	j := &HarnessJudge{
 		sel:  harness.Selection{Model: m, Harness: c},
-		eval: c, cli: "claude", runner: r, hostSandboxed: true,
+		eval: c, cli: "claude", runner: r,
 	}
 	if _, err := j.Judge(context.Background(), t.TempDir(), "verdict?", time.Second); err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func TestHarnessJudgeErrors(t *testing.T) {
 		{"runtime error", &specRunner{result: runner.Result{ExitCode: 1}}, "empty CLI output"},
 	}
 	for _, tt := range tests {
-		j, err := NewHarnessJudge(fakeJudgeSelection(), tt.runner, false)
+		j, err := NewHarnessJudge(fakeJudgeSelection(), tt.runner, model.InnerSandbox{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,7 +127,7 @@ func TestHarnessJudgeErrors(t *testing.T) {
 func TestNewHarnessJudgeRejectsNonEvalHarness(t *testing.T) {
 	// fakeTriggerProvider implements harness.Harness but not EvalRunner.
 	sel := harness.Selection{Model: model.Model{ID: "fake/model-1"}, Harness: &fakeTriggerProvider{}}
-	if _, err := NewHarnessJudge(sel, &specRunner{}, false); err == nil ||
+	if _, err := NewHarnessJudge(sel, &specRunner{}, model.InnerSandbox{}); err == nil ||
 		!strings.Contains(err.Error(), "cannot run headless judge sessions") {
 		t.Errorf("err = %v, want headless-judge rejection", err)
 	}

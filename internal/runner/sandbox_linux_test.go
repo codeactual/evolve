@@ -245,3 +245,27 @@ func TestSandboxedRunNeedsRunDirectory(t *testing.T) {
 		t.Errorf("wrap without a Dir = %v, want a fail-closed run-directory error", err)
 	}
 }
+
+// TestProbeSandboxOuter runs the outer smoke probe for real.
+func TestProbeSandboxOuter(t *testing.T) {
+	e := newLiveEnv(t, SandboxConfig{})
+	if err := ProbeSandbox(context.Background(), e.sandbox); err != nil {
+		t.Errorf("ProbeSandbox: %v", err)
+	}
+	if err := ProbeSandbox(context.Background(), Sandbox{}); err != nil {
+		t.Errorf("ProbeSandbox(disabled) = %v, want nil", err)
+	}
+}
+
+// TestLiveSandboxExposesBwrapFirstOnPath pins that the validated bubblewrap is
+// the first `bwrap` on the sandbox's PATH, so the agent CLIs' nested sandboxes
+// use it rather than the (possibly AppArmor-profiled) system one.
+func TestLiveSandboxExposesBwrapFirstOnPath(t *testing.T) {
+	e := newLiveEnv(t, SandboxConfig{})
+	res := e.run(t, script(`command -v bwrap; echo "$PATH"`))
+	lines := strings.Split(strings.TrimSpace(string(res.Stdout)), "\n")
+	if res.ExitCode != 0 || len(lines) < 2 || lines[0] != "/evolve/bin/bwrap" || !strings.HasPrefix(lines[1], "/evolve/bin:") {
+		t.Errorf("bwrap inside the sandbox: exit %d, stdout %q, stderr %q; want /evolve/bin/bwrap first on PATH",
+			res.ExitCode, res.Stdout, res.StderrTail)
+	}
+}

@@ -139,7 +139,7 @@ func (nonEvalHarness) CLI() []string                                  { return [
 func (nonEvalHarness) EnvKeys() []string                              { return nil }
 func (nonEvalHarness) SkillDirs() []string                            { return nil }
 func (nonEvalHarness) ScanLine([]byte, string, string) (bool, string) { return false, "" }
-func (nonEvalHarness) TriggerSpec(ws, _, _ string, _ bool) model.CommandSpec {
+func (nonEvalHarness) TriggerSpec(ws, _, _ string, _ model.InnerSandbox) model.CommandSpec {
 	return model.CommandSpec{Dir: ws}
 }
 

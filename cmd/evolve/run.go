@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -154,7 +155,7 @@ func (f *SweepFlags) judgeModel(cmd *cobra.Command) string {
 func (f *SweepFlags) resolveJudge(cmd *cobra.Command, common run.Options, warn io.Writer) (grade.Judge, error) {
 	sel, err := opts.JudgeSelection(f.judgeModel(cmd))
 	if err == nil {
-		return run.NewHarnessJudge(sel, common.Runner, common.HostSandboxed)
+		return run.NewHarnessJudge(sel, common.Runner, common.InnerSandbox)
 	}
 	explicit := cmd.Flags().Changed("judge-model") ||
 		(opts.Viper != nil && opts.Viper.IsSet("judge_model") && opts.Viper.GetString("judge_model") != "")
@@ -181,6 +182,19 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 	sandbox, err := resolveSandbox(repo, runFlags.NoSandbox)
 	if err != nil {
 		return run.Options{}, err
+	}
+	inner, err := innerSandboxConfig()
+	if err != nil {
+		return run.Options{}, err
+	}
+	if !f.CountOnly { // a count-only run starts no agent
+		ctx := cmd.Context()
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		if err := preflightSandbox(ctx, sandbox); err != nil {
+			return run.Options{}, err
+		}
 	}
 	// A --harness/--model filter may only narrow the configured restriction; a
 	// value outside it is a hard error, before any work begins.
@@ -218,7 +232,7 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 		Selected:       selected,
 		Counter:        counter,
 		Runner:         &runner.Exec{Sandbox: sandbox},
-		HostSandboxed:  sandbox.Enabled,
+		InnerSandbox:   inner,
 		PluginFilter:   f.Plugin,
 		SkillFilter:    f.Skill,
 		Timeout:        time.Duration(f.Timeout) * time.Second,

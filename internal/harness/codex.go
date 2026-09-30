@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/codeactual/evolve/internal/model"
@@ -90,12 +91,12 @@ func seedCodexConfig(srcHome, home string) {
 }
 
 // TriggerSpec builds the headless `codex exec` command for one trigger query.
-func (c *Codex) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) model.CommandSpec {
-	argv := []string{"codex", "exec", query, "--json", "--skip-git-repo-check", "-m", cliModelID}
-	if hostSandboxed {
-		// codex defaults to a read-only Seatbelt sandbox even for exec; that nests
-		// illegally inside evolve's, so disable it and let evolve confine.
-		argv = append(argv, "--sandbox", "danger-full-access")
+// Codex's own sandbox stays on, read-only: a trigger run only reads skills, so
+// workspace-write would grant writes it never needs.
+func (c *Codex) TriggerSpec(ws, query, cliModelID string, _ model.InnerSandbox) model.CommandSpec {
+	argv := []string{
+		"codex", "exec", query, "--json", "--skip-git-repo-check", "-m", cliModelID,
+		"--sandbox", "read-only",
 	}
 	env, readPaths := codexEnv(ws)
 	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
@@ -108,21 +109,19 @@ func (c *Codex) ScanLine(line []byte, skill, _ string) (bool, string) {
 }
 
 // EvalSpec builds the headless `codex exec` command for one behavioral eval.
+// Codex's own sandbox stays on, in workspace-write mode inside evolve's outer
+// sandbox (both use bubblewrap on Linux, so they nest): writes are confined to
+// the workspace, and shell commands get network only when the operator opted in
+// (sandbox.codex_network_access). Codex keeps .git read-only inside the
+// workspace, so a Codex agent cannot commit.
 func (c *Codex) EvalSpec(ws string, in model.EvalInput, cliModelID string) model.CommandSpec {
-	// codex applies its own macOS Seatbelt sandbox for read-only/workspace-write,
-	// which cannot nest inside evolve's. When evolve already confines the run,
-	// switch codex to danger-full-access so evolve's sandbox is the sole layer;
-	// otherwise keep workspace-write as codex's own confinement.
-	sandboxMode := "workspace-write"
-	if in.HostSandboxed {
-		sandboxMode = "danger-full-access"
-	}
 	env, readPaths := codexEnv(ws)
 	return model.CommandSpec{
 		Argv: []string{
 			"codex", "exec", in.Prompt,
 			"--json", "--skip-git-repo-check",
-			"--sandbox", sandboxMode,
+			"--sandbox", "workspace-write",
+			"-c", "sandbox_workspace_write.network_access=" + strconv.FormatBool(in.InnerSandbox.CodexNetworkAccess),
 			"-m", cliModelID,
 		},
 		Dir:       ws,

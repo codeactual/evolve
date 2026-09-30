@@ -67,11 +67,10 @@ type Options struct {
 	// fingerprint exists — a brand-new case is New's concern, not Modified's.
 	Modified       bool
 	KeepWorkspaces bool
-	// HostSandboxed reports that Runner wraps each agent in evolve's own OS
-	// sandbox, so harnesses must disable the agent CLI's own sandbox to avoid
-	// illegal nesting (threaded into TriggerSpec/EvalSpec). It mirrors the
-	// runner's Sandbox.Enabled; the CLI sets both together.
-	HostSandboxed bool
+	// InnerSandbox configures the agent CLIs' own sandboxes, which are always on
+	// and layered inside the runner's outer sandbox (threaded into
+	// TriggerSpec/EvalSpec).
+	InnerSandbox  model.InnerSandbox
 	ResultsFormat string // emitted results format: json, jsonc, or yaml ("" = json)
 	ToolVersion   string
 	Now           func() time.Time

@@ -90,7 +90,7 @@ func TestClaudeIsolation(t *testing.T) {
 
 	ws := t.TempDir()
 	iso := isolatedDir(ws, claudeConfigRel)
-	spec := NewClaude().TriggerSpec(ws, "q", "m", false)
+	spec := NewClaude().TriggerSpec(ws, "q", "m", model.InnerSandbox{})
 	requireEnv(t, spec.Env, "CLAUDE_CONFIG_DIR="+iso)
 	eval := NewClaude().EvalSpec(ws, model.EvalInput{Prompt: "p"}, "m")
 	requireEnv(t, eval.Env, "CLAUDE_CONFIG_DIR="+iso)
@@ -124,7 +124,7 @@ func TestClaudeIsolation(t *testing.T) {
 	// No operator credentials → nothing bridged (env-key CI).
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	ws2 := t.TempDir()
-	_ = NewClaude().TriggerSpec(ws2, "q", "m", false)
+	_ = NewClaude().TriggerSpec(ws2, "q", "m", model.InnerSandbox{})
 	if _, err := os.Lstat(filepath.Join(isolatedDir(ws2, claudeConfigRel), ".credentials.json")); !os.IsNotExist(err) {
 		t.Errorf("expected no bridged credentials, err=%v", err)
 	}
@@ -141,7 +141,7 @@ func TestCodexIsolation(t *testing.T) {
 
 	ws := t.TempDir()
 	iso := isolatedDir(ws, codexHomeRel)
-	spec := NewCodex().TriggerSpec(ws, "q", "m", false)
+	spec := NewCodex().TriggerSpec(ws, "q", "m", model.InnerSandbox{})
 	requireEnv(t, spec.Env, "CODEX_HOME="+iso)
 	eval := NewCodex().EvalSpec(ws, model.EvalInput{Prompt: "p"}, "m")
 	requireEnv(t, eval.Env, "CODEX_HOME="+iso)
@@ -176,7 +176,7 @@ func TestCodexIsolation(t *testing.T) {
 	t.Setenv("CODEX_HOME", op2)
 	mustWriteFile(t, filepath.Join(op2, "config.toml"), []byte("model = \"gpt-5.2\"\n"), 0o644)
 	ws2 := t.TempDir()
-	_ = NewCodex().TriggerSpec(ws2, "q", "m", false)
+	_ = NewCodex().TriggerSpec(ws2, "q", "m", model.InnerSandbox{})
 	if _, err := os.Lstat(filepath.Join(isolatedDir(ws2, codexHomeRel), "config.toml")); !os.IsNotExist(err) {
 		t.Errorf("expected no seeded config.toml, err=%v", err)
 	}

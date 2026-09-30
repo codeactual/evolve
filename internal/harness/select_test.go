@@ -19,7 +19,7 @@ func (stubHarness) CLI() []string                                  { return []st
 func (stubHarness) EnvKeys() []string                              { return nil }
 func (stubHarness) SkillDirs() []string                            { return nil }
 func (stubHarness) ScanLine([]byte, string, string) (bool, string) { return false, "" }
-func (stubHarness) TriggerSpec(ws, _, _ string, _ bool) model.CommandSpec {
+func (stubHarness) TriggerSpec(ws, _, _ string, _ model.InnerSandbox) model.CommandSpec {
 	return model.CommandSpec{Dir: ws}
 }
 

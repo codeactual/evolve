@@ -4,8 +4,11 @@
 package harness
 
 import (
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // codexStream is a real `codex exec --json` capture (aggregated_output trimmed):
@@ -97,5 +100,36 @@ func TestCodexRuntimeError(t *testing.T) {
 		if got := c.RuntimeError([]byte(tt.stdout), tt.exitCode, false); got != tt.want {
 			t.Errorf("%s: RuntimeError = %q, want %q", tt.name, got, tt.want)
 		}
+	}
+}
+
+func TestCodexTriggerSpecReadOnly(t *testing.T) {
+	spec := NewCodex().TriggerSpec(t.TempDir(), "q", "gpt-5.5", model.InnerSandbox{})
+	if !containsPair(spec.Argv, "--sandbox", "read-only") {
+		t.Errorf("trigger argv lacks --sandbox read-only: %v", spec.Argv)
+	}
+	if slices.Contains(spec.Argv, "danger-full-access") {
+		t.Errorf("trigger argv must never disable Codex's sandbox: %v", spec.Argv)
+	}
+}
+
+func TestCodexEvalSpecNetworkOffByDefault(t *testing.T) {
+	spec := NewCodex().EvalSpec(t.TempDir(), model.EvalInput{Prompt: "p"}, "gpt-5.5")
+	if !containsPair(spec.Argv, "--sandbox", "workspace-write") {
+		t.Errorf("eval argv lacks --sandbox workspace-write: %v", spec.Argv)
+	}
+	if !containsPair(spec.Argv, "-c", "sandbox_workspace_write.network_access=false") {
+		t.Errorf("eval argv lacks network_access=false by default: %v", spec.Argv)
+	}
+	if slices.Contains(spec.Argv, "danger-full-access") {
+		t.Errorf("eval argv must never disable Codex's sandbox: %v", spec.Argv)
+	}
+}
+
+func TestCodexEvalSpecNetworkAccessOptIn(t *testing.T) {
+	in := model.EvalInput{Prompt: "p", InnerSandbox: model.InnerSandbox{CodexNetworkAccess: true}}
+	spec := NewCodex().EvalSpec(t.TempDir(), in, "gpt-5.5")
+	if !containsPair(spec.Argv, "-c", "sandbox_workspace_write.network_access=true") {
+		t.Errorf("eval argv lacks network_access=true after the opt-in: %v", spec.Argv)
 	}
 }

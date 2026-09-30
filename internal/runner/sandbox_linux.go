@@ -20,6 +20,18 @@ import (
 // loaders and #! interpreters resolve.
 var systemDirs = []string{"/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32"}
 
+// sandboxBinDir is where the validated bubblewrap is exposed inside the
+// sandbox, and the first entry of PATH there, so the agent CLIs (which nest a
+// bubblewrap of their own per command) resolve the same vetted binary.
+//
+// This matters on hosts where AppArmor restricts unprivileged user namespaces
+// (Ubuntu 24.04+, kernel.apparmor_restrict_unprivileged_userns=1): its profile
+// attaches by path to /usr/bin/bwrap and strips the capabilities of that
+// bubblewrap's descendants, which breaks Claude Code's seccomp helper (it
+// creates a further user namespace). The same file at another path is
+// unprofiled, so the nested layers work end to end.
+const sandboxBinDir = "/evolve/bin"
+
 // hostRoot inspects the host's root filesystem layout. root is "/" on a real
 // host; tests point it at a fixture tree so the layout-dependent argv (symlinked
 // /lib, a resolv.conf outside /etc) is exercised without a particular distro.
@@ -163,6 +175,7 @@ func sandboxArgv(p sandboxPlan, host hostRoot) []string {
 	a = append(a, "--ro-bind", "/sys", "/sys", "--proc", "/proc", "--dev", "/dev",
 		"--tmpfs", "/tmp", "--tmpfs", "/var/tmp")
 	a = appendBind(a, "--ro-bind", filepath.Dir(p.argv[0]))
+	a = append(a, "--ro-bind", p.bwrap, sandboxBinDir+"/bwrap")
 	if p.repoRoot != "" {
 		a = appendBind(a, "--ro-bind", p.repoRoot)
 	}

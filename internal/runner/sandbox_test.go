@@ -76,6 +76,7 @@ func TestSandboxArgvOrder(t *testing.T) {
 		"--proc", "/proc", "--dev", "/dev",
 		"--tmpfs", "/tmp", "--tmpfs", "/var/tmp",
 		"--ro-bind", "/usr/local/bin", "/usr/local/bin",
+		"--ro-bind", "/usr/bin/bwrap", "/evolve/bin/bwrap",
 		"--ro-bind", "/work/repo", "/work/repo",
 		"--ro-bind", "/home/u/.gitconfig", "/home/u/.gitconfig",
 		"--ro-bind", "/opt/tools", "/opt/tools",
