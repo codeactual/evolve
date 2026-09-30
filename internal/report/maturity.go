@@ -33,16 +33,15 @@ var stableFloor = goversion.Must(goversion.NewVersion("1.0.0"))
 // DefaultGatedMaturity is the default gated maturity set for report --check:
 // every user-selectable level, so a plugin is gated exactly as it was before
 // maturity-aware evidence gating existed (a non-breaking default). It is the
-// single source of truth for that default — the CLI runtime default, the
-// --maturity flag default, and the configdoc default all derive from it.
+// single source of truth for that default — the CLI runtime default and the
+// --maturity flag default both derive from it.
 // It is a package-level slice, so callers that need their own copy (rather
 // than sharing this backing array) must copy it, e.g. via slices.Clone.
 var DefaultGatedMaturity = []Maturity{MaturityStable, MaturityUnstable, MaturityPrerelease}
 
 // DefaultGatedMaturityStrings renders DefaultGatedMaturity as its string
-// tokens, in order — the shared projection the --maturity flag default and the
-// config-reference default both derive from, so neither can drift from
-// DefaultGatedMaturity.
+// tokens, in order — the shared projection the --maturity flag default derives
+// from, so it cannot drift from DefaultGatedMaturity.
 func DefaultGatedMaturityStrings() []string {
 	levels := make([]string, len(DefaultGatedMaturity))
 	for i, m := range DefaultGatedMaturity {
