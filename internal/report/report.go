@@ -40,14 +40,6 @@ type Options struct {
 	// dropped from the tables and listed in the "Excluded models" note. Nil means
 	// no filtering — every model with stored results is reported.
 	ActiveModels map[string]bool
-
-	// JUnitPath and CoberturaPath, when non-empty, emit the matching CI artifact
-	// alongside the EVALUATION files. Coverage is the per-skill data the Cobertura
-	// profile renders (the caller computes it via run.Coverage); it is required
-	// only when CoberturaPath is set.
-	JUnitPath     string
-	CoberturaPath string
-	Coverage      []SkillCoverage
 }
 
 // SummarySchema is the EVALUATION rollup's schema version
@@ -179,17 +171,6 @@ func Generate(opts Options) (*Summary, error) {
 			if err := writeFile(filepath.Join(pf.plugin.Dir, "EVALUATION.md"), page); err != nil {
 				return nil, err
 			}
-		}
-	}
-	if opts.JUnitPath != "" {
-		if err := writeXMLFile(opts.JUnitPath, renderJUnitXML(loaded)); err != nil {
-			return nil, err
-		}
-	}
-	if opts.CoberturaPath != "" {
-		data := renderCoberturaXML(opts.Coverage, coberturaTimestamp(summary.LatestRun))
-		if err := writeXMLFile(opts.CoberturaPath, data); err != nil {
-			return nil, err
 		}
 	}
 	return summary, nil
@@ -818,13 +799,4 @@ func maxStr(a, b string) string {
 
 func writeFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
-}
-
-// writeXMLFile writes a CI artifact, creating its parent directory (the
-// `coverage/` convention puts these in a dir that may not exist yet).
-func writeXMLFile(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
 }

@@ -1,13 +1,8 @@
 # local builds
 /builds/
-/dist/
 
 # coverage (make test)
 /coverage/
-
-# report viewer (Vite SPA embedded into the binary via -tags withui)
-/internal/web/ui/node_modules/
-/internal/web/ui/dist/
 
 # claude
 /.claude/plans/

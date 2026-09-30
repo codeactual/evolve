@@ -63,7 +63,7 @@ func TestCheckVersionPin(t *testing.T) {
 
 // TestCheckVersionPinNonReleaseBuild pins the non-release escape hatch: a
 // binary version that is not semver (the from-source "dev" default) or carries
-// a prerelease (git-describe, goreleaser snapshots) bypasses the pin with a
+// a prerelease (git-describe builds) bypasses the pin with a
 // warning rather than blocking contributors, matching terraform's behavior —
 // go-version constraints would otherwise reject every prerelease outright.
 func TestCheckVersionPinNonReleaseBuild(t *testing.T) {

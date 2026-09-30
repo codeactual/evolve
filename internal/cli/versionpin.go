@@ -25,7 +25,7 @@ func (o *Options) VersionPin() string {
 // reports so one contributor's evolve upgrade cannot force everyone else's. No
 // pin passes; an unparseable pin is a config error. Only release builds are
 // checked: a binary version that is not semver ("dev") or carries a prerelease
-// (git-describe and goreleaser snapshots) warns to w and passes, matching
+// (git-describe builds) warns to w and passes, matching
 // terraform's required_version — the pin polices released upgrades, not
 // from-source builds, and go-version constraints reject every prerelease
 // outright.

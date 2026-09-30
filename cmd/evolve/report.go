@@ -20,8 +20,6 @@ type ReportFlags struct {
 	Migrate             bool
 	MinTriggersPassRate float64
 	MinEvalsPassRate    float64
-	JUnit               string
-	Cobertura           string
 	Strict              bool
 	Maturity            string
 }
@@ -56,33 +54,16 @@ var reportCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		junit := opts.JUnitPath()
-		if cmd.Flags().Changed("junit") {
-			junit = reportFlags.JUnit
-		}
-		cobertura := opts.CoberturaPath()
-		if cmd.Flags().Changed("cobertura") {
-			cobertura = reportFlags.Cobertura
-		}
 		strict := opts.StrictConfig()
 		if cmd.Flags().Changed("strict") {
 			strict = reportFlags.Strict
 		}
-		var coverage []report.SkillCoverage
-		if cobertura != "" {
-			if coverage, err = opts.Coverage(repo, strict); err != nil {
-				return err
-			}
-		}
 		summary, err := report.Generate(report.Options{
-			Repo:          repo,
-			ToolVersion:   version.Version,
-			Models:        models,
-			Format:        opts.ResultsFormat,
-			ActiveModels:  active,
-			JUnitPath:     junit,
-			CoberturaPath: cobertura,
-			Coverage:      coverage,
+			Repo:         repo,
+			ToolVersion:  version.Version,
+			Models:       models,
+			Format:       opts.ResultsFormat,
+			ActiveModels: active,
 		})
 		if err != nil {
 			return err
@@ -159,13 +140,8 @@ func init() {
 	reportCmd.Flags().Float64Var(&reportFlags.MinEvalsPassRate, "min-evals-pass-rate",
 		report.DefaultEvalsMinPassRate,
 		"minimum eval pass rate (0..1) for --check (overrides report.thresholds)")
-	reportCmd.Flags().StringVar(&reportFlags.JUnit, "junit", "",
-		"also write a JUnit XML test-results file to this path (overrides report.junit)")
-	reportCmd.Flags().StringVar(&reportFlags.Cobertura, "cobertura", "",
-		"also write a Cobertura XML coverage file to this path (overrides report.cobertura)")
 	reportCmd.Flags().BoolVar(&reportFlags.Strict, "strict", false,
-		"require the configured model matrix: --check holds every defined model to the thresholds, "+
-			"and --cobertura covers a skill only when every defined model has a current result")
+		"require the configured model matrix: --check holds every defined model to the thresholds")
 	reportCmd.Flags().StringVar(&reportFlags.Maturity, "maturity", report.DefaultGatedMaturityFlag(),
 		"comma-separated maturity levels (stable, unstable, prerelease) whose evidence issues fail --check; "+
 			"others warn (overrides report.thresholds.maturity)")

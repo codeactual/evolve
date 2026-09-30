@@ -3,20 +3,19 @@
 
 package version
 
-// Version is injected at build time via -ldflags (see Makefile and
-// .goreleaser.yaml).
+// Version is injected at build time via -ldflags (`make build` stamps it).
 //
-// Version defaults to dev when no release metadata is supplied.
+// Version defaults to dev when no build metadata is supplied.
 var Version = "dev"
 
-// Commit is injected at build time via -ldflags (see Makefile and
-// .goreleaser.yaml).
+// Commit may be injected at build time via -ldflags; `make build` does not set
+// it.
 //
-// Commit defaults to none when no release metadata is supplied.
+// Commit defaults to none when no build metadata is supplied.
 var Commit = "none"
 
-// BuildDate is injected at build time via -ldflags (see Makefile and
-// .goreleaser.yaml).
+// BuildDate may be injected at build time via -ldflags; `make build` does not
+// set it.
 //
-// BuildDate defaults to unknown when no release metadata is supplied.
+// BuildDate defaults to unknown when no build metadata is supplied.
 var BuildDate = "unknown"
