@@ -11,13 +11,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/remote"
-	"github.com/bitwise-media-group/evolve/internal/run"
-	"github.com/bitwise-media-group/evolve/internal/telemetry"
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/remote"
+	"github.com/codeactual/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/telemetry"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 // remoteSelections resolves (model, harness) selections without probing PATH

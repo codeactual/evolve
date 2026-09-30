@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/evalspec"
 )
 
 func sample() *File {

@@ -6,7 +6,7 @@ package tui
 import (
 	"slices"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // treeNode is one row in the selection form's plugin → skill → case tree. The

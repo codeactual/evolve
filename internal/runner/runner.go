@@ -23,11 +23,11 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // scopeName is this package's OpenTelemetry instrumentation scope.
-const scopeName = "github.com/bitwise-media-group/evolve/internal/runner"
+const scopeName = "github.com/codeactual/evolve/internal/runner"
 
 // obs lazily builds the tracer and instruments on first Run, after telemetry
 // has installed the global providers; before then otel's globals are no-ops, so

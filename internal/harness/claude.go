@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // Claude drives the `claude` CLI (Claude Code).

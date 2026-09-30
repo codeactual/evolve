@@ -6,7 +6,7 @@ package harness
 import (
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 func TestAllAndByID(t *testing.T) {

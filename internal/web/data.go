@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 // Dataset is the read-only payload the browser loads (GET /api/results) and the

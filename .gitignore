@@ -1,14 +1,11 @@
 # local builds
-/evolve
+/builds/
 /dist/
 /site/
 /.cache/
 
 # coverage (make test)
 /coverage/
-
-# node stuff
-/node_modules/
 
 # report viewer (Vite SPA embedded into the binary via -tags withui)
 /internal/web/ui/node_modules/

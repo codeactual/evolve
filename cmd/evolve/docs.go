@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 
-	"github.com/bitwise-media-group/evolve/internal/configdoc"
+	"github.com/codeactual/evolve/internal/configdoc"
 )
 
 // DocsFlags holds the flags for the hidden docs command.

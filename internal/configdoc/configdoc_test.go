@@ -15,7 +15,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/tailscale/hujson"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/encfmt"
 )
 
 // parseExample loads a generated example the same way the CLI would, so the

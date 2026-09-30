@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/manifest"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/manifest"
 )
 
 // Signals are the deterministic, non-blocking companion to Checks. Where a

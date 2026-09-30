@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 // defaultWatchInterval is how often Watch polls the results files for changes.

@@ -12,14 +12,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/bitwise-media-group/evolve/internal/cli"
-	"github.com/bitwise-media-group/evolve/internal/grade"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/run"
-	"github.com/bitwise-media-group/evolve/internal/runner"
-	"github.com/bitwise-media-group/evolve/internal/telemetry"
-	"github.com/bitwise-media-group/evolve/internal/tokencount"
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/cli"
+	"github.com/codeactual/evolve/internal/grade"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/telemetry"
+	"github.com/codeactual/evolve/internal/tokencount"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 // RunFlags holds the flags every `run` subcommand inherits from runCmd's

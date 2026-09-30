@@ -8,8 +8,8 @@ import (
 	"encoding/xml"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 func TestRenderJUnitXML(t *testing.T) {

@@ -19,13 +19,13 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/runner"
 )
 
 // scopeName is this package's OpenTelemetry instrumentation scope.
-const scopeName = "github.com/bitwise-media-group/evolve/internal/grade"
+const scopeName = "github.com/codeactual/evolve/internal/grade"
 
 func tracer() trace.Tracer { return otel.Tracer(scopeName) }
 

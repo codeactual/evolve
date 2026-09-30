@@ -9,8 +9,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // The right-column "Details" pane: the selected execution's pinned header above

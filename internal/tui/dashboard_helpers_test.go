@@ -6,7 +6,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // TestPendingGlyph proves the "queued to run" indicator is tinted by the prior

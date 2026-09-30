@@ -11,14 +11,14 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // scopeName is this package's OpenTelemetry instrumentation scope. The engine
 // reaches the global tracer through it rather than importing internal/telemetry,
 // so telemetry can import internal/run for its reporter decorator without a
 // cycle.
-const scopeName = "github.com/bitwise-media-group/evolve/internal/run"
+const scopeName = "github.com/codeactual/evolve/internal/run"
 
 func tracer() trace.Tracer { return otel.Tracer(scopeName) }
 

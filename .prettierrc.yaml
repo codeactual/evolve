@@ -1,9 +1,0 @@
-# Copyright 2026 Bitwise Media Group
-# SPDX-License-Identifier: MIT
-
-printWidth: 80
-proseWrap: always
-overrides:
-  - files: "*.{md,html}"
-    options:
-      printWidth: 120

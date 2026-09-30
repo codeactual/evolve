@@ -14,14 +14,14 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/report"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/schemas"
+	"github.com/codeactual/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/report"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/schemas"
 )
 
-const idBase = "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/"
+const idBase = "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/"
 
 // compile builds every embedded schema, registered under its published $id
 // so cross-file refs resolve offline. Compiling them all is itself the

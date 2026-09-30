@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/manifest"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/manifest"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 // SkillCoverage is one skill's coverage datum: its repo-relative SKILL.md path,

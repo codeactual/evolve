@@ -8,14 +8,14 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/report"
+	"github.com/codeactual/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/report"
 )
 
 // schemaID is the published $id of the configuration schema: the raw URL of
 // the generated file under docs/config, so an editor can resolve it by link.
-const schemaID = "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/docs/config/config.schema.json"
+const schemaID = "https://raw.githubusercontent.com/codeactual/evolve/main/docs/config/config.schema.json"
 
 // schemaDescription documents the instance the schema validates.
 const schemaDescription = "Optional .evolve.<ext> configuration for an evolve repository " +

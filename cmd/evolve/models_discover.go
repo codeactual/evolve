@@ -15,9 +15,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/bitwise-media-group/evolve/internal/cli"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/tui"
+	"github.com/codeactual/evolve/internal/cli"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/tui"
 )
 
 var modelsDiscoverFlags struct {

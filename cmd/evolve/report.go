@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bitwise-media-group/evolve/internal/cli"
-	"github.com/bitwise-media-group/evolve/internal/report"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/cli"
+	"github.com/codeactual/evolve/internal/report"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 // ReportFlags holds the flags for `evolve report`.

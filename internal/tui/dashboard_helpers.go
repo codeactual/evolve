@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // Cross-pane rendering primitives shared by the dashboard view files: status

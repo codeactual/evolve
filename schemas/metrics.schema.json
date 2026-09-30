@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/metrics.schema.json",
+  "$id": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/metrics.schema.json",
   "title": "metrics.json (skill-creator superset)",
   "description": "Executor metrics, compatible with skill-creator's metrics.json. Also embedded as execution_metrics in grading documents and evolve results; evolve populates it once transcript instrumentation lands.",
   "type": "object",

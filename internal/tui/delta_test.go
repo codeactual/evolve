@@ -6,8 +6,8 @@ package tui
 import (
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 func TestColorDirections(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/layout"
 )
 
 func runChecks(t *testing.T, fixture string) []Finding {

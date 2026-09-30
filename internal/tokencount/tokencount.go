@@ -21,11 +21,11 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // scopeName is this package's OpenTelemetry instrumentation scope.
-const scopeName = "github.com/bitwise-media-group/evolve/internal/tokencount"
+const scopeName = "github.com/codeactual/evolve/internal/tokencount"
 
 func tracer() trace.Tracer { return otel.Tracer(scopeName) }
 

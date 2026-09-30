@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/runner"
 )
 
 // resolveSandbox builds the filesystem-confinement policy for agent runs from

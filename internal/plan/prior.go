@@ -3,7 +3,7 @@
 
 package plan
 
-import "github.com/bitwise-media-group/evolve/internal/results"
+import "github.com/codeactual/evolve/internal/results"
 
 // PriorMetrics holds the last committed per-case metrics a live run is compared
 // against: the current results (the basis for vs-previous) and any without-skill

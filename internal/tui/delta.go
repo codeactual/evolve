@@ -6,8 +6,8 @@ package tui
 import (
 	"fmt"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 // Live deltas: the dashboard compares each finished case against the run it is

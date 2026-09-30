@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 func TestFingerprintChangesOnWrite(t *testing.T) {

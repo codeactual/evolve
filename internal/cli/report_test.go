@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/bitwise-media-group/evolve/internal/report"
+	"github.com/codeactual/evolve/internal/report"
 )
 
 func TestThresholdsDefaults(t *testing.T) {

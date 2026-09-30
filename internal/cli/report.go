@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/report"
-	"github.com/bitwise-media-group/evolve/internal/run"
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/report"
+	"github.com/codeactual/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 // Thresholds reads report.thresholds from config, falling back to the report

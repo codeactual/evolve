@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // Claude Code emits one JSON event per line under --output-format stream-json

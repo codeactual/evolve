@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/tailscale/hujson"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/encfmt"
 )
 
 // ErrFailures signals that checks or evals ran to completion and at least one

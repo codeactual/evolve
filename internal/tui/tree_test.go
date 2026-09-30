@@ -6,7 +6,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // caseTree builds a one-plugin, one-skill tree with two trigger cases and one

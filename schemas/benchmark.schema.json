@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/benchmark.schema.json",
+  "$id": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/benchmark.schema.json",
   "title": "benchmark.json (skill-creator superset)",
   "description": "With-skill vs without-skill benchmark output, compatible with skill-creator's benchmark.json (its viewer reads these exact field names). Evolve extras are additive and optional; an evolve benchmark mode emits against this contract.",
   "type": "object",

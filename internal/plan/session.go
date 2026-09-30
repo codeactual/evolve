@@ -4,8 +4,8 @@
 package plan
 
 import (
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // CaseReason categorizes, for one (model, case) pair, why a rerun might select

@@ -6,8 +6,8 @@ package plan
 import (
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 func TestFilterInclusion(t *testing.T) {

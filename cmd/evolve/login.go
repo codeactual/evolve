@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bitwise-media-group/evolve/internal/remote"
+	"github.com/codeactual/evolve/internal/remote"
 )
 
 // loginFlags holds the login command's flags.

@@ -1,4 +1,4 @@
-module github.com/bitwise-media-group/evolve
+module github.com/codeactual/evolve
 
 go 1.26.5
 

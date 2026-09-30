@@ -4,8 +4,8 @@
 package cli
 
 import (
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 // Repo detects the repository the global flags select.

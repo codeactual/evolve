@@ -13,8 +13,8 @@ import (
 
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 // clearOTELEnv blanks every OTEL_* var so env detection cannot drift a test into

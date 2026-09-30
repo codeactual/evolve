@@ -13,8 +13,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/manifest"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/manifest"
 )
 
 // Content fingerprints let --modified rerun a case whose authored content

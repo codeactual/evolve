@@ -9,9 +9,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/grade"
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/grade"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // JudgeSelection resolves the judge-model token (--judge-model / judge_model /

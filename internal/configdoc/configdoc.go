@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/grade"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/report"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/grade"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/report"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 // Option documents one leaf configuration key.

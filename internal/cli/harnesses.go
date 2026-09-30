@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/harness"
 )
 
 // AllowedHarnessIDs returns the harness ids the `harnesses` config restriction

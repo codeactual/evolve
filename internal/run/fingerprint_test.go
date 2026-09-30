@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/evalspec"
 )
 
 func TestTriggerContentHashTracksFrontmatter(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // grokJSONSuccess mirrors the headless --output-format json envelope documented

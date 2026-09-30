@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/common.schema.json",
+  "$id": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/common.schema.json",
   "title": "evolve shared definitions",
   "description": "Shared building blocks referenced by the other evolve schemas. Consumers must treat an absent key and an explicit null identically.",
   "$defs": {
