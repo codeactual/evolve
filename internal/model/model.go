@@ -46,6 +46,10 @@ type CommandSpec struct {
 	Dir   string   // workspace the agent runs in
 	Env   []string // extras appended to os.Environ()
 	Stdin []byte   // fed to the process's stdin, then closed; nil = no stdin
+	// ReadPaths are host paths the run may read but not write: bound read-only
+	// inside the sandbox at their real path (the bridged credential files, the
+	// judge's view of a workspace). Ignored when the run is unsandboxed.
+	ReadPaths []string
 }
 
 // Usage is the harness-reported consumption of one live agent session. Fields

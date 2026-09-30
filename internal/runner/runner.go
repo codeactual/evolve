@@ -134,7 +134,7 @@ func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Dur
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	argv, err := e.Sandbox.wrap(spec.Dir, spec.Argv)
+	argv, err := e.Sandbox.wrap(spec)
 	if err != nil {
 		return Result{}, startError(span, err)
 	}
@@ -147,6 +147,11 @@ func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Dur
 	cmd := exec.CommandContext(runCtx, argv[0], argv[1:]...)
 	cmd.Dir = spec.Dir
 	cmd.Env = append(os.Environ(), spec.Env...)
+	if e.Sandbox.Enabled {
+		// The host's TMPDIR path is not mounted: point temp files at the
+		// sandbox's own tmpfs.
+		cmd.Env = append(cmd.Env, "TMPDIR=/tmp")
+	}
 	if spec.Stdin != nil {
 		cmd.Stdin = bytes.NewReader(spec.Stdin)
 	}

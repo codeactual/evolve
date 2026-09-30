@@ -37,26 +37,32 @@ func NewCodex() *Codex {
 const codexHomeRel = ".evolve/codex-home"
 
 // codexEnv returns the process env extras for a codex invocation in ws:
-// isolated CODEX_HOME with the operator's auth bridged in.
-func codexEnv(ws string) []string {
+// isolated CODEX_HOME with the operator's auth bridged in, and the operator
+// files the run reads through that home (the bridged auth.json), which a
+// sandboxed run must bind read-only.
+func codexEnv(ws string) (env, readPaths []string) {
 	home := isolatedDir(ws, codexHomeRel)
-	ensureCodexHome(home)
-	return []string{"CODEX_HOME=" + home}
+	if target := ensureCodexHome(home); target != "" {
+		readPaths = append(readPaths, target)
+	}
+	return []string{"CODEX_HOME=" + home}, readPaths
 }
 
-// ensureCodexHome creates the isolated home, links the operator's auth.json
-// (write-through so a mid-run token refresh sticks), and carries over the
-// credential-store selection. Best-effort per the isolate.go contract.
-func ensureCodexHome(home string) {
+// ensureCodexHome creates the isolated home, links the operator's auth.json,
+// and carries over the credential-store selection. It returns the real path of
+// the linked auth.json ("" when none is linked). Best-effort per the isolate.go
+// contract.
+func ensureCodexHome(home string) string {
 	if err := os.MkdirAll(home, 0o755); err != nil {
-		return
+		return ""
 	}
 	srcHome := operatorDir("CODEX_HOME", ".codex")
 	if srcHome == "" || sameFilePath(srcHome, home) {
-		return
+		return ""
 	}
-	linkFile(filepath.Join(srcHome, "auth.json"), filepath.Join(home, "auth.json"))
+	target := linkFile(filepath.Join(srcHome, "auth.json"), filepath.Join(home, "auth.json"))
 	seedCodexConfig(srcHome, home)
+	return target
 }
 
 // seedCodexConfig writes a minimal config.toml into the isolated home carrying
@@ -91,7 +97,8 @@ func (c *Codex) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) mo
 		// illegally inside evolve's, so disable it and let evolve confine.
 		argv = append(argv, "--sandbox", "danger-full-access")
 	}
-	return model.CommandSpec{Argv: argv, Dir: ws, Env: codexEnv(ws)}
+	env, readPaths := codexEnv(ws)
+	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }
 
 // ScanLine is best-effort: any event-stream line mentioning the skill's
@@ -110,6 +117,7 @@ func (c *Codex) EvalSpec(ws string, in model.EvalInput, cliModelID string) model
 	if in.HostSandboxed {
 		sandboxMode = "danger-full-access"
 	}
+	env, readPaths := codexEnv(ws)
 	return model.CommandSpec{
 		Argv: []string{
 			"codex", "exec", in.Prompt,
@@ -117,8 +125,9 @@ func (c *Codex) EvalSpec(ws string, in model.EvalInput, cliModelID string) model
 			"--sandbox", sandboxMode,
 			"-m", cliModelID,
 		},
-		Dir: ws,
-		Env: codexEnv(ws),
+		Dir:       ws,
+		Env:       env,
+		ReadPaths: readPaths,
 	}
 }
 

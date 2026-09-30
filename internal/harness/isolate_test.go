@@ -22,13 +22,22 @@ func TestLinkFilePrefersSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	linkFile(src, dst)
+	target := linkFile(src, dst)
 	info, err := os.Lstat(dst)
 	if err != nil {
 		t.Fatalf("dst after linkFile: %v", err)
 	}
 	if info.Mode()&os.ModeSymlink == 0 {
 		t.Log("dst is a copy, not a symlink (acceptable fallback)")
+		if target != "" {
+			t.Errorf("linkFile reported target %q for a copy, want empty", target)
+		}
+	} else if want, _ := filepath.EvalSymlinks(src); target != want {
+		t.Errorf("linkFile target = %q, want the real source path %q", target, want)
+	}
+	// A second call finds dst already linked and reports the same target.
+	if again := linkFile(src, dst); again != target {
+		t.Errorf("repeat linkFile target = %q, want %q", again, target)
 	}
 	got, err := os.ReadFile(dst)
 	if err != nil {
@@ -42,8 +51,10 @@ func TestLinkFilePrefersSymlink(t *testing.T) {
 func TestLinkFileNoOps(t *testing.T) {
 	dir := t.TempDir()
 
-	// Missing src leaves no dst behind.
-	linkFile(filepath.Join(dir, "absent"), filepath.Join(dir, "dst"))
+	// Missing src leaves no dst behind and reports no target.
+	if got := linkFile(filepath.Join(dir, "absent"), filepath.Join(dir, "dst")); got != "" {
+		t.Errorf("linkFile(missing src) target = %q, want empty", got)
+	}
 	if _, err := os.Lstat(filepath.Join(dir, "dst")); !os.IsNotExist(err) {
 		t.Errorf("expected no dst for missing src, err=%v", err)
 	}
@@ -53,7 +64,9 @@ func TestLinkFileNoOps(t *testing.T) {
 	dst := filepath.Join(dir, "existing")
 	mustWriteFile(t, src, []byte("new"), 0o600)
 	mustWriteFile(t, dst, []byte("old"), 0o600)
-	linkFile(src, dst)
+	if got := linkFile(src, dst); got != "" {
+		t.Errorf("linkFile(existing regular dst) target = %q, want empty", got)
+	}
 	if got, _ := os.ReadFile(dst); string(got) != "old" {
 		t.Errorf("existing dst overwritten: %q", got)
 	}
@@ -102,6 +115,11 @@ func TestClaudeIsolation(t *testing.T) {
 	if string(got) != string(cred) {
 		t.Errorf(".credentials.json body = %q, want %q", got, cred)
 	}
+	// The bridged file's real path is reported so a sandboxed run binds it.
+	wantCred := filepath.Join(opDir, ".credentials.json")
+	if !slices.Equal(spec.ReadPaths, []string{wantCred}) || !slices.Equal(eval.ReadPaths, []string{wantCred}) {
+		t.Errorf("ReadPaths = %v / %v, want [%s]", spec.ReadPaths, eval.ReadPaths, wantCred)
+	}
 
 	// No operator credentials → nothing bridged (env-key CI).
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
@@ -134,6 +152,10 @@ func TestCodexIsolation(t *testing.T) {
 	}
 	if string(got) != string(auth) {
 		t.Errorf("auth.json body = %q, want %q", got, auth)
+	}
+	wantAuth := filepath.Join(opHome, "auth.json")
+	if !slices.Equal(spec.ReadPaths, []string{wantAuth}) || !slices.Equal(eval.ReadPaths, []string{wantAuth}) {
+		t.Errorf("ReadPaths = %v / %v, want [%s]", spec.ReadPaths, eval.ReadPaths, wantAuth)
 	}
 
 	// Seeded config carries only the credential-store selection — never the

@@ -47,25 +47,38 @@ func operatorDir(envVar, defaultRel string) string {
 	return filepath.Join(userHome, defaultRel)
 }
 
-// linkFile exposes src inside an isolated state dir. Prefers a symlink so
-// mid-run writes (e.g. a token refresh) go through to the real file; falls
-// back to a one-shot 0600 copy when symlink is unavailable. No-op when src is
-// missing (CI with env-var auth only) or dst already exists.
-func linkFile(src, dst string) {
-	if _, err := os.Lstat(dst); err == nil {
-		return
+// linkFile exposes src inside an isolated state dir. Prefers a symlink to the
+// real (symlink-resolved) path; falls back to a one-shot 0600 copy when symlink
+// is unavailable. No-op when src is missing (CI with env-var auth only) or dst
+// already exists.
+//
+// It returns the real path dst links to whenever dst is, or already was, such a
+// symlink — the path a sandboxed run must bind read-only for the link to
+// resolve inside its hidden filesystem — and "" otherwise (a copy, a no-op).
+func linkFile(src, dst string) string {
+	if info, err := os.Lstat(dst); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, _ := os.Readlink(dst)
+			return target
+		}
+		return ""
 	}
 	if _, err := os.Stat(src); err != nil {
-		return
+		return ""
 	}
-	if err := os.Symlink(src, dst); err == nil {
-		return
+	target := src
+	if resolved, err := filepath.EvalSymlinks(src); err == nil {
+		target = resolved
+	}
+	if err := os.Symlink(target, dst); err == nil {
+		return target
 	}
 	data, err := os.ReadFile(src)
 	if err != nil {
-		return
+		return ""
 	}
 	_ = os.WriteFile(dst, data, 0o600)
+	return ""
 }
 
 // sameFilePath reports whether a and b name the same path after cleaning.

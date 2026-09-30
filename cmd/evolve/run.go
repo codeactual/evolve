@@ -32,6 +32,9 @@ type RunFlags struct {
 	// an escape hatch for hosts without the sandbox helper (config:
 	// sandbox.enabled=false is the durable equivalent).
 	NoSandbox bool
+	// BwrapPath overrides sandbox.bwrap_path: the bubblewrap to run, instead of
+	// the one on PATH. It must pass the same provenance checks.
+	BwrapPath string
 }
 
 var runFlags = RunFlags{}
@@ -264,7 +267,9 @@ func init() {
 	runCmd.PersistentFlags().BoolVar(&runFlags.Strict, "strict", false,
 		"exit 1 when checks or evals fail (default: warn and exit 0)")
 	runCmd.PersistentFlags().BoolVar(&runFlags.NoSandbox, "no-sandbox", false,
-		"disable the OS sandbox that confines agent writes to the workspace (config: sandbox.enabled)")
+		"disable the OS sandbox that confines agents to their workspace (operator config: sandbox.enabled)")
+	runCmd.PersistentFlags().StringVar(&runFlags.BwrapPath, "bwrap-path", "",
+		"bubblewrap executable for the sandbox, instead of the one on PATH (operator config: sandbox.bwrap_path)")
 	runCmd.AddCommand(runAllCmd)
 	rootCmd.AddCommand(runCmd)
 }

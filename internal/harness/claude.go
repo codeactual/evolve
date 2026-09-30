@@ -56,27 +56,32 @@ const claudeSandboxOff = `{"sandbox":{"enabled":false}}`
 const claudeConfigRel = ".evolve/claude-home"
 
 // claudeEnv returns the process env extras that point a claude invocation in
-// ws at a throwaway workspace-rooted config dir.
-func claudeEnv(ws string) []string {
+// ws at a throwaway workspace-rooted config dir, and the operator files the
+// run reads through that dir (the bridged credentials), which a sandboxed run
+// must bind read-only.
+func claudeEnv(ws string) (env, readPaths []string) {
 	dir := isolatedDir(ws, claudeConfigRel)
-	ensureClaudeConfig(dir)
+	if target := ensureClaudeConfig(dir); target != "" {
+		readPaths = append(readPaths, target)
+	}
 	return []string{
 		"CLAUDE_CONFIG_DIR=" + dir,
 		"DISABLE_AUTOUPDATER=1",
-	}
+	}, readPaths
 }
 
 // ensureClaudeConfig creates the isolated config dir, seeds the state file,
 // and links the operator's OAuth credentials: Claude keeps .credentials.json
-// beside its config, so the link is what carries auth. Best-effort per the
-// isolate.go contract.
-func ensureClaudeConfig(dir string) {
+// beside its config, so the link is what carries auth. It returns the real
+// path of the linked credentials file ("" when none is linked). Best-effort per
+// the isolate.go contract.
+func ensureClaudeConfig(dir string) string {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return
+		return ""
 	}
 	seedClaudeState(dir)
 	opDir := operatorDir("CLAUDE_CONFIG_DIR", ".claude")
-	linkFile(filepath.Join(opDir, ".credentials.json"), filepath.Join(dir, ".credentials.json"))
+	return linkFile(filepath.Join(opDir, ".credentials.json"), filepath.Join(dir, ".credentials.json"))
 }
 
 // seedClaudeState writes the isolated .claude.json (with CLAUDE_CONFIG_DIR
@@ -105,7 +110,8 @@ func (c *Claude) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) m
 	if hostSandboxed {
 		argv = append(argv, "--settings", claudeSandboxOff)
 	}
-	return model.CommandSpec{Argv: argv, Dir: ws, Env: claudeEnv(ws)}
+	env, readPaths := claudeEnv(ws)
+	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }
 
 // claudeContentBlock is one content block of a Claude message in stream-json
@@ -230,7 +236,8 @@ func (c *Claude) EvalSpec(ws string, in model.EvalInput, cliModelID string) mode
 	if in.HostSandboxed {
 		argv = append(argv, "--settings", claudeSandboxOff)
 	}
-	return model.CommandSpec{Argv: argv, Dir: ws, Env: claudeEnv(ws)}
+	env, readPaths := claudeEnv(ws)
+	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }
 
 // ParseEvalOutput reads the final answer and usage from the terminal result

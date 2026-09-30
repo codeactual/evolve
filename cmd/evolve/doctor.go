@@ -78,6 +78,11 @@ var doctorCmd = &cobra.Command{
 			outf(cmd.OutOrStdout(), "WARN: %s\n", msg)
 		}
 
+		outln(cmd.OutOrStdout(), "\nSANDBOX")
+		for _, line := range sandboxDoctorLines(cmd.Context()) {
+			outf(cmd.OutOrStdout(), "  %s\n", line)
+		}
+
 		outf(cmd.OutOrStdout(), "\nLLM judge: %s\n", judgeStatus())
 
 		outf(cmd.OutOrStdout(), "\nVersion pin: %s\n", versionPinStatus())
@@ -86,6 +91,8 @@ var doctorCmd = &cobra.Command{
 }
 
 func init() {
+	doctorCmd.Flags().StringVar(&runFlags.BwrapPath, "bwrap-path", "",
+		"bubblewrap executable to check, instead of the one on PATH (operator config: sandbox.bwrap_path)")
 	rootCmd.AddCommand(doctorCmd)
 }
 
