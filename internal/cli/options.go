@@ -71,7 +71,7 @@ type Options struct {
 // The repository under test is untrusted, so its config is loaded into its own
 // viper first and rejected when it sets an operator-only key (see
 // operatorOnlyKeys); only then is it merged over the user-level config. The
-// removed sandbox.protected_roots key is an error in either file.
+// removed protected-roots key is an error in either file.
 func (o *Options) LoadConfig(cmd *cobra.Command) error {
 	v := o.Viper
 	v.SetEnvPrefix("EVOLVE")
@@ -179,7 +179,7 @@ func findConfigFile(dir, base string) (string, error) {
 // loadConfigFile finds and loads the single <base>.<ext> in dir into its own
 // viper. It returns a nil viper (and no error) when dir is empty or holds no
 // such file. More than one file is ambiguous and rejected rather than silently
-// prioritized; the removed sandbox.protected_roots key is rejected in any file.
+// prioritized; the removed protected-roots key is rejected in any file.
 func loadConfigFile(dir, base string) (*viper.Viper, string, error) {
 	if dir == "" {
 		return nil, "", nil

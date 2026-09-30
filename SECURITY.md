@@ -3,26 +3,101 @@
 ## Reporting a vulnerability
 
 Please report vulnerabilities privately via
-[GitHub Security Advisories](https://github.com/bitwise-media-group/evolve/security/advisories/new). Do not open public
-issues for security reports.
+[GitHub Security Advisories](https://github.com/codeactual/evolve/security/advisories/new). Do not open public issues
+for security reports.
 
 ## Threat model (summary)
 
-evolve is a CLI you install from signed releases and run locally to evaluate coding-agent plugins. Its security surface
-is the integrity of the distributed binary and the parsing of untrusted authored input. It defends against:
+evolve is a Linux CLI that evaluates coding-agent plugins by driving real agent CLIs (Claude Code and Codex) in
+throwaway workspaces and grading the results. The agents run with permission prompts off, so the containment layers
+below are the control, not the prompts.
 
-- **Tampered release artifacts** — every release ships `checksums.txt`, a GitHub SLSA build-provenance attestation over
-  those checksums, a keyless Sigstore (cosign) bundle per binary signed with the release workflow's GitHub OIDC
-  identity, and an SPDX SBOM per archive, so a downloaded binary can be verified as exactly what the release workflow
-  built.
-- **Untrusted spec and config parsing** — evolve reads authored config (`.evolve.<ext>`) and trigger/eval spec files in
-  JSON, JSONC, YAML, or TOML; decoding rejects malformed input with an error instead of crashing, and fixture path
-  references in eval files are constrained to the evals directory so they cannot escape it via traversal.
+### What is untrusted
 
-Out of scope: the coding agents, providers, and plugin repositories evolve evaluates — it invokes the tools and runs
-against the repositories you point it at, so vetting that third-party code is the operator's responsibility. Also out of
-scope are a compromise of the release workflow's signing identity (that identity is the trust anchor) and a compromise
-of the machine running evolve.
+The **repository under test** is untrusted: its skills, eval fixtures, eval prompts and its own `.evolve.<ext>` config
+can all carry prompt injection or hostile settings. Content the agents and the LLM judge read is untrusted too: an
+agent's output, the files it leaves in its workspace, and the eval author's expected-output text.
+
+The operator is trusted: the operator's own flags, `EVOLVE_*` environment, user-level config file, `PATH`, and the agent
+CLIs they installed.
+
+### What evolve enforces
+
+- **Operator-only configuration.** The `sandbox.*` keys, `cache_dir` and `telemetry.*` steer the sandbox and host-side
+  paths evolve writes to, so they come only from flags, `EVOLVE_*` environment variables, or the user-level config at
+  `$XDG_CONFIG_HOME/evolve/config.<ext>` (default `~/.config/evolve/config.<ext>`). A repository `.evolve.<ext>` that
+  sets any of them is rejected with exit 2, and so is the removed protected-roots key anywhere. Offered-model
+  probes run from a fresh empty directory, and the Claude probe ignores project settings and MCP servers, so a hostile
+  repository cannot run code through them.
+- **A deny-by-default outer sandbox.** Every agent run and every command assertion executes inside bubblewrap with a
+  fresh root that shows only:
+  - the system directories and `/etc`, `/sys`, `/proc`, `/dev`;
+  - the agent executable;
+  - the repository under test, read-only;
+  - the operator's default git config files (`~/.gitconfig` and `$XDG_CONFIG_HOME/git/config`, falling back to
+    `~/.config/git/config`), read-only — never `git/credentials`;
+  - the bridged credential files (Claude `.credentials.json`, Codex `auth.json`), read-only;
+  - grants the operator lists in `sandbox.read_paths` (read-only) and `sandbox.write_paths` (read-write);
+  - the run directory, read-write.
+
+  The operator's home directory, other checkouts, `~/.ssh`, cloud credentials and shell rc files are not visible. `HOME`
+  stays set but is not mounted: it is an ephemeral directory on the sandbox's writable root. A grant may not be `/` or
+  an ancestor of the home directory. `bubblewrap` itself is validated before every run — an absolute path resolving to
+  a regular file, not setuid or setgid, owned by root or the operator, and neither it nor any ancestor directory
+  group- or other-writable — and is never executed to be checked.
+- **The agents' own sandboxes stay on, layered inside.** Claude Code runs with its sandbox enabled, `failIfUnavailable`,
+  unsandboxed commands disallowed and a strict network allowlist; Codex runs `read-only` for triggers and
+  `workspace-write` for evals. Agent shell commands therefore get no network unless the operator opts in with
+  `sandbox.claude_allowed_domains` or `sandbox.codex_network_access`. `evolve run` refuses to start (exit 2) when the
+  nested sandboxes cannot start, and `evolve doctor` explains why.
+- **An allowlisted environment.** Agents receive `PATH`, `HOME`, `XDG_CONFIG_HOME`, locale, terminal, proxy and TLS
+  basics, the credential variables their own CLI reads, and the names in `sandbox.env_passthrough` — not the operator's
+  whole shell. `GITHUB_TOKEN`, `AWS_*` and evolve's `EVOLVE_*` token-counting keys never reach an agent. Codex also runs
+  with its own `*KEY*`/`*SECRET*`/`*TOKEN*` shell-environment excludes on.
+- **A hardened LLM judge.** The judge runs in its own directory with its own fresh CLI config home, a read-only view of
+  the workspace it grades, no code-running tools, hooks, MCP servers or project settings, and returns schema-constrained
+  structured output that is decoded strictly. The agent's output and the expected-output text are quoted inside
+  per-call random nonce fences and labelled untrusted evidence, and a verdict block quoted from that content can never
+  stand in for the judge's answer.
+
+Also in scope, as before: parsing of untrusted authored input. evolve reads authored config and trigger/eval spec files
+in JSON, JSONC or YAML; decoding rejects malformed input with an error instead of crashing, and fixture path references
+in eval files are constrained to the evals directory so they cannot escape it via traversal.
+
+### Accepted residual risks
+
+These are known and accepted; evolve does not claim to close them.
+
+- **The network is shared.** The outer sandbox shares the host network, so an agent's own process can reach any host. A
+  fixture's `.claude/settings.json` `env` block can point the agent's own API calls, together with its token, at another
+  host. Agent *shell commands* are the layer with no network by default.
+- **Bridged credential files are readable by the agent.** They are bound read-only, so an agent cannot write through to
+  your real files, but its own process can read them, and its workspace symlinks to them outlive the run under
+  `--keep-workspaces`.
+- **A mid-run OAuth refresh cannot persist.** Because the credential files are read-only in the sandbox, a refresh
+  during a run is lost, and with refresh-token rotation it can invalidate the stored login.
+- **Together, those mean an agent process can read its bridged credential file and send it to any host.**
+- **Tokens kept in the default-bound git config are exposed.** The read-only git config binds expose anything you keep
+  in `~/.gitconfig` or `git/config` (for example `http.*.extraHeader` or token-bearing `insteadOf` URLs) to the agent,
+  and so to any host.
+- **Claude's shell commands can read env-provided credentials.** evolve forwards the credential variables the Claude CLI
+  reads (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`) when you export them. Claude Code's
+  `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` would strip them from its tool subprocesses, but in claude 2.1.285 it forces the
+  permission mode to default, which ends the prompts-off eval posture, so evolve does not set it. A file-based login
+  never reaches the environment.
+- **An LLM judge can still be persuaded.** The judge's attack surface is removed, but persuasive agent output or
+  workspace content can still influence an LLM grader's verdicts; no design makes one immune.
+- **evolve trusts your `PATH`** for `claude`, `codex` and `git`, and a validated `sandbox.bwrap_path`. An earlier
+  `--no-sandbox` run of a hostile repository could have planted a binary in an operator-owned `PATH` directory.
+- **`--no-sandbox` (or `sandbox.enabled=false`) removes the outer boundary.** The agents' own sandboxes still apply.
+- **Tool caches need grants.** Toolchains and caches under `HOME` are not visible unless you grant them, which widens
+  the visible surface by exactly what you list.
+
+### Out of scope
+
+The coding agents, providers and plugin repositories evolve evaluates — it invokes the tools and runs against the
+repositories you point it at, and the operator decides which third-party plugins to evaluate. A compromise of the
+machine running evolve, or of the kernel or bubblewrap itself, is also out of scope.
 
 ## Code scanning triage
 

@@ -23,7 +23,7 @@ evolve run all
 From the root of a plugin repository:
 
 ```sh
-evolve doctor          # check provider CLIs, credentials and counting APIs
+evolve doctor          # check provider CLIs, credentials, counting APIs and the sandbox
 evolve run checks      # Tier 0 — static validation
 evolve run triggers    # Tier 1 — trigger accuracy
 evolve run evals       # Tier 2 — behavioral evals
@@ -46,11 +46,18 @@ evolve run all --strict
 evolve report --check
 ```
 
-!!! tip "Interactive by default"
+> [!TIP]
+> **Interactive by default.** On a TTY, `run triggers`, `run evals` and `run all` open a full-screen TUI — a selection
+> form to scope the run, then a live dashboard. Pass `--no-tui` (or set `EVOLVE_NO_TUI=1`) for plain line output in CI.
+> Both drive the same engine, so the run is identical either way. See [TUI](tui.md).
 
-    On a TTY, `run triggers`, `run evals` and `run all` open a full-screen TUI — a selection form to scope the run,
-    then a live dashboard. Pass `--no-tui` (or set `EVOLVE_NO_TUI=1`) for plain line output in CI. Both drive the same
-    engine, so the run is identical either way. See [TUI](tui.md).
+## Confinement
+
+evolve runs on Linux. Agents run with their permission prompts off, so the run is confined instead: each agent CLI
+starts inside a deny-by-default bubblewrap sandbox that shows only the system directories, the repository under test
+(read-only) and its own throwaway workspace, and the agent CLIs' own sandboxes stay on inside it. Agent shell commands
+get no network until you opt in. Run `evolve doctor` to check that the prerequisites (`bubblewrap`, `socat`, nested user
+namespaces) work on your host; [Sandbox and trust](reference.md#sandbox-and-trust) describes the model.
 
 ## Next steps
 

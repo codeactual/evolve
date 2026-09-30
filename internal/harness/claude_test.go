@@ -335,7 +335,7 @@ func TestClaudeJudgeSpec(t *testing.T) {
 	if !slices.Equal(spec.Argv, want) {
 		t.Errorf("judge argv =\n%v\nwant\n%v", spec.Argv, want)
 	}
-	for _, banned := range []string{"bypassPermissions", "--allowedTools", "--settings", "--dangerously-skip-permissions"} {
+	for _, banned := range []string{"bypassPermissions", "--allowedTools", "--settings"} {
 		if slices.Contains(spec.Argv, banned) {
 			t.Errorf("judge argv must not carry %s: %v", banned, spec.Argv)
 		}

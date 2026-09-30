@@ -47,8 +47,11 @@ result matches: the files exist, the `Makefile` has a `pr` target, and the whole
 
 \* A case must declare at least one `expectations` entry **or** one `assertions` entry, or it fails to load.
 
-Evals run with the agent's permission prompts bypassed: the workspace sandbox is the confinement boundary, and the agent
-is free to use whatever tools it would reach for in real use. There is no per-case tool allowlist — several agent CLIs
+Evals run with the agent's permission prompts bypassed: the layered sandboxes (evolve's deny-by-default outer sandbox,
+plus the agent CLI's own sandbox inside it) are the confinement boundary, and the agent is free to use whatever tools it
+would reach for in real use. By default its shell commands have no network — an eval whose task runs `npm ci` or
+`go mod download` needs the operator to opt in with `sandbox.claude_allowed_domains` (Claude) or
+`sandbox.codex_network_access` (Codex); see [Configuration](../config/index.md). There is no per-case tool allowlist — several agent CLIs
 kill a headless session outright on a would-prompt tool call, and a restricted toolset grades the allowlist as much as
 the skill.
 
@@ -119,7 +122,7 @@ collide. `go-project`'s `pin-tool` is the textbook case: it stages both a root `
 ```json
 {
     "id": "pin-tool",
-    "prompt": "Pin goreleaser as a developer tool and add a Makefile snapshot target, per our Go tooling conventions.",
+    "prompt": "Pin staticcheck as a developer tool and add a Makefile lint target, per our Go tooling conventions.",
     "files": ["files/go.mod", "files/cmd/app/main.go", "files/tools/go.mod", "files/Makefile"]
 }
 ```
@@ -151,11 +154,10 @@ names. `go-testing`'s `fuzzdemo` fixture is a complete, compiling package (`go.m
 The extra files in the fixture are convenient for developing and sanity-checking the eval by hand; they simply don't
 enter the workspace unless listed.
 
-!!! note "Paths can't escape the workspace"
-
-    `files` entries are resolved relative to the eval directory and staged inside the workspace; a path that would land
-    outside it is rejected at load. A leading `evals/` segment is tolerated so skill-creator's skill-root-relative paths
-    drop in unchanged.
+> [!NOTE]
+> **Paths can't escape the workspace.** `files` entries are resolved relative to the eval directory and staged inside
+> the workspace; a path that would land outside it is rejected at load. A leading `evals/` segment is tolerated so
+> skill-creator's skill-root-relative paths drop in unchanged.
 
 ## Grading the result
 
@@ -184,5 +186,5 @@ evolve run evals --model anthropic,openai --jobs 4 --max-turns 12 --timeout 900
 and grading are in [How evaluations run](execution.md).
 
 Every field above is validated by the
-[`evals` JSON Schema](https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/evals.schema.json);
+[`evals` JSON Schema](https://raw.githubusercontent.com/codeactual/evolve/main/schemas/evals.schema.json);
 point your editor at it via the `"$schema"` key for completion and inline errors.

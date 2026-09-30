@@ -25,16 +25,36 @@ evolve seeds two things:
   right one; an **eval** workspace links in _only the skill under test_, so a pass reflects that skill and nothing else.
 - **The `files` fixtures**, copied in byte-for-byte at the destinations described in [Behavioral evals](evals.md).
 
-While the agent runs, an OS sandbox confines its writes to the workspace, so a misbehaving run can't touch the rest of
-your machine (disable with `--no-sandbox`). When the case finishes and grading is done, the workspace is removed. Pass
-`--keep-workspaces` to leave them on disk for debugging — useful when an assertion fails and you want to see exactly
-what the agent produced.
+While the agent runs, it is confined by two nested sandboxes (Linux only, via bubblewrap), so a misbehaving run can't
+touch or read the rest of your machine:
+
+- **evolve's outer sandbox is deny-by-default.** The agent sees only the system directories, its own executable, the
+  repository under test (read-only), its workspace, your git config files (`~/.gitconfig` and
+  `$XDG_CONFIG_HOME/git/config`, read-only) and the bridged credential files (read-only) — plus whatever you grant with
+  the operator-only `sandbox.read_paths` and `sandbox.write_paths`. Your home directory is not mounted: `HOME` is set
+  but starts empty, and anything written there vanishes when the run ends. The network stays shared. Disable the outer
+  sandbox with `--no-sandbox`.
+- **The agent CLI's own sandbox is always on inside it.** Claude Code's Bash sandbox is enabled through `--settings`
+  (fail-closed, no network for its shell commands unless you list hosts in `sandbox.claude_allowed_domains`), and Codex
+  runs `read-only` for triggers and `workspace-write` for evals (no network for its commands unless
+  `sandbox.codex_network_access` is set). Codex keeps `.git` read-only inside the workspace, so a Codex agent cannot
+  commit.
+
+The agent process also gets an allowlisted environment rather than your whole shell: `PATH`/`HOME`, locale, terminal,
+proxy and TLS basics, its own harness's credential variables, and any names you list in `sandbox.env_passthrough`. The
+`sandbox.*` keys, `cache_dir` and `telemetry.*` are operator-only — set them with flags, `EVOLVE_*` environment
+variables, or the user-level config file (`$XDG_CONFIG_HOME/evolve/config.<ext>`, default
+`~/.config/evolve/config.<ext>`); a repository `.evolve.<ext>` that sets any of them is rejected with exit 2. See
+[Configuration](../config/index.md).
+
+When the case finishes and grading is done, the workspace is removed. Pass `--keep-workspaces` to leave them on disk for
+debugging — useful when an assertion fails and you want to see exactly what the agent produced.
 
 The workspace is also the agent's entire session footprint. Each harness points its CLI at a throwaway state directory
-under `<workspace>/.evolve/` — via the CLI's config-dir variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`,
-`GROK_HOME`) or an overridden `$HOME` for CLIs without one — with your login credentials bridged in read-through. Eval
-sessions never appear in your real session history, and no long-term memory carries across runs. Under
-`--keep-workspaces`, session transcripts survive in that directory alongside the workspace files.
+under `<workspace>/.evolve/` via the CLI's config-dir variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`), with your login
+credentials bridged in read-only. Eval sessions never appear in your real session history, and no long-term memory
+carries across runs. Under `--keep-workspaces`, session transcripts survive in that directory alongside the workspace
+files.
 
 ```mermaid
 flowchart LR
@@ -50,17 +70,17 @@ flowchart LR
 ## Running a behavioral eval
 
 For Tier 2, the harness driving the model builds the actual CLI invocation from the case: the `prompt`, `max_turns`,
-`timeout_seconds`, and the provider-specific model id, with the agent's permission prompts bypassed (the workspace
-sandbox is the confinement boundary). evolve runs it through the one harness bound to that model — evals execute **once
+`timeout_seconds`, and the provider-specific model id, with the agent's permission prompts bypassed (the layered
+sandboxes are the confinement boundary). evolve runs it through the one harness bound to that model — evals execute **once
 per model**, never once per harness.
 
 When the run returns, evolve captures two things from the agent's output: its **final response text** (ANSI-stripped)
 and the **tool calls it made**. Those feed grading — the response and workspace for `regex`/`file_exists`/`command`, the
 observed calls for `tool_call`.
 
-Driving a model for a graded eval needs a harness with the **eval-runner** capability (every builtin harness except
-Gemini today); harnesses without it are trigger-only. `evolve doctor` and `evolve models` show which models are runnable
-in your environment.
+Driving a model for a graded eval needs a harness with the **eval-runner** capability (both builtin harnesses, Claude
+Code and Codex, have it); a harness without it would be trigger-only. `evolve doctor` and `evolve models` show which
+models are runnable in your environment.
 
 ## Running a trigger
 
@@ -85,9 +105,13 @@ Grading runs in two passes — and that is the literal execution order, though r
   `judge_model`/`--judge-model` overrides it) _regardless of the model under test_, so verdicts stay comparable across
   providers; any installed harness that supports the judge model may drive it. It reads the numbered assertion texts,
   the eval's `expected_output` as context, and the agent's final response, and may inspect the workspace before
-  returning each pass/fail verdict with a short evidence quote. The judge runs with the eval agent's tool posture under
-  evolve's sandbox, so it sees the workspace as the deterministic pass left it — including any files a `command`
-  assertion wrote.
+  returning each pass/fail verdict with a short evidence quote. The judge runs in its own directory (not the
+  workspace), with a fresh CLI config home and a read-only view of the workspace: Claude runs with read-only tools
+  (`Read`, `Grep`, `Glob`) and project settings, hooks and MCP disabled, and Codex runs in its read-only sandbox. The
+  agent's response and the `expected_output` are quoted in nonce-marked fences and treated as untrusted evidence, never
+  instructions, and the verdicts come back as schema-constrained structured output, strictly decoded — so it sees the
+  workspace as the deterministic pass left it, including any files a `command` assertion wrote, but content under test
+  can't steer or alter it.
 
 A run that produced no usable output at all — auth blocked, a crash, or a claude session rejected by the account's usage
 limit — is reported as a **runtime error** rather than graded: the case's result carries the reason instead of a

@@ -21,7 +21,7 @@ authoritative, and a mismatch only warns):
 
 ```json
 {
-    "$schema": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/triggers.schema.json",
+    "$schema": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/triggers.schema.json",
     "skill_name": "go-testing",
     "triggers": [
         { "query": "Add table-driven tests for this Go parser", "should_trigger": true },
@@ -82,10 +82,9 @@ happen. The last is the same task (idiomatic error handling) in the wrong langua
 - **Same task, wrong domain.** Take a real positive and swap the language or framework ("Add structured logging to my
   Express app" for `go-style`). These catch a skill that keys off the verb instead of the context.
 
-!!! tip "Aim for a balanced set"
-
-    A suite that is 90% positives over-reports accuracy. Roughly matching positives and negatives — and weighting the
-    negatives toward sibling skills — makes the score mean something.
+> [!TIP]
+> **Aim for a balanced set.** A suite that is 90% positives over-reports accuracy. Roughly matching positives and
+> negatives — and weighting the negatives toward sibling skills — makes the score mean something.
 
 ## Running them
 
@@ -120,5 +119,5 @@ root `models`, so a query you do not want a given provider to run is best handle
 
 Once a skill triggers reliably, the next question is whether it does the _job_ — that's a behavioral eval. Continue to
 [Behavioral evals](evals.md). Every field above is validated by the
-[`triggers` JSON Schema](https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/triggers.schema.json);
+[`triggers` JSON Schema](https://raw.githubusercontent.com/codeactual/evolve/main/schemas/triggers.schema.json);
 point your editor at it via the `"$schema"` key for completion and inline errors.

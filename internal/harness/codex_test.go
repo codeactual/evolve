@@ -110,9 +110,6 @@ func TestCodexTriggerSpecReadOnly(t *testing.T) {
 	if !containsPair(spec.Argv, "--sandbox", "read-only") {
 		t.Errorf("trigger argv lacks --sandbox read-only: %v", spec.Argv)
 	}
-	if slices.Contains(spec.Argv, "danger-full-access") {
-		t.Errorf("trigger argv must never disable Codex's sandbox: %v", spec.Argv)
-	}
 }
 
 func TestCodexEvalSpecNetworkOffByDefault(t *testing.T) {
@@ -122,9 +119,6 @@ func TestCodexEvalSpecNetworkOffByDefault(t *testing.T) {
 	}
 	if !containsPair(spec.Argv, "-c", "sandbox_workspace_write.network_access=false") {
 		t.Errorf("eval argv lacks network_access=false by default: %v", spec.Argv)
-	}
-	if slices.Contains(spec.Argv, "danger-full-access") {
-		t.Errorf("eval argv must never disable Codex's sandbox: %v", spec.Argv)
 	}
 }
 

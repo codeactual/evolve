@@ -248,7 +248,7 @@ func TestLoadConfigRejectsOperatorOnlyKeyInRepoConfig(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsRemovedProtectedRoots(t *testing.T) {
+func TestLoadConfigRejectsRemovedKey(t *testing.T) {
 	xdg := userConfigDir(t)
 	writeFile(t, xdg, "config.yaml", "sandbox:\n  protected_roots: [/home/u/Repos]\n")
 	o := &Options{Viper: viper.New(), Root: t.TempDir(), Layout: "auto"}
