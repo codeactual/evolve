@@ -1,20 +1,21 @@
 // Copyright 2026 BitWise Media Group Ltd
 // SPDX-License-Identifier: MIT
 
-//go:build windows
+//go:build linux
 
 package runner
 
 import (
 	"os/exec"
-	"strconv"
+	"syscall"
 )
 
 // configureProcessTreeKill makes cancellation take down the runner CLI's whole
-// process tree, not just the direct child. Windows has no POSIX process
-// groups; taskkill /T walks the tree and /F force-kills it.
+// process tree, not just the direct child: the child starts in its own process
+// group and Cancel SIGKILLs that group (negative pid).
 func configureProcessTreeKill(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
-		return exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid)).Run()
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 }

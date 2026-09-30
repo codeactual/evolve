@@ -75,9 +75,6 @@ func TestHarnessJudge(t *testing.T) {
 // confinement) at the raised judge turn ceiling. Built directly rather than
 // through NewHarnessJudge so the test never needs a claude CLI on PATH.
 func TestHarnessJudgeClaudePosture(t *testing.T) {
-	// A set credential var keeps the harness isolation setup from consulting
-	// the host's real Keychain.
-	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "test-token")
 	c := harness.NewClaude()
 	m := model.Model{
 		ID: "anthropic/claude-sonnet-5", ProviderID: "anthropic",

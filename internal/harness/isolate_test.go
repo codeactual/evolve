@@ -94,24 +94,9 @@ func requireEnv(t *testing.T, env []string, entry string) {
 	}
 }
 
-// TestClaudeKeychainService pins the per-config-dir Keychain service name to
-// the value observed from claude 2.1.220 (security shim, see the function's
-// doc comment). If the CLI changes its scheme this pin goes stale together
-// with the bridge itself.
-func TestClaudeKeychainService(t *testing.T) {
-	got := claudeKeychainService("/Users/deavon/.config/claude")
-	want := "Claude Code-credentials-c92fbf8b"
-	if got != want {
-		t.Errorf("claudeKeychainService = %q, want %q", got, want)
-	}
-}
-
 func TestClaudeIsolation(t *testing.T) {
 	opDir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", opDir)
-	// A set credential env var suppresses the machine-dependent Keychain
-	// bridge, keeping this test hermetic on macOS dev machines.
-	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "tok-test")
 	cred := []byte(`{"claudeAiOauth":{"accessToken":"x"}}`)
 	if err := os.WriteFile(filepath.Join(opDir, ".credentials.json"), cred, 0o600); err != nil {
 		t.Fatal(err)
@@ -136,7 +121,7 @@ func TestClaudeIsolation(t *testing.T) {
 		t.Errorf(".claude.json = %q", state)
 	}
 
-	// Operator OAuth credentials bridged (Linux keeps them beside the config).
+	// Operator OAuth credentials bridged (Claude keeps them beside the config).
 	got, err := os.ReadFile(filepath.Join(iso, ".credentials.json"))
 	if err != nil {
 		t.Fatalf(".credentials.json in isolated dir: %v", err)
@@ -145,7 +130,7 @@ func TestClaudeIsolation(t *testing.T) {
 		t.Errorf(".credentials.json body = %q, want %q", got, cred)
 	}
 
-	// No operator credentials → nothing bridged (macOS Keychain / env-key CI).
+	// No operator credentials → nothing bridged (env-key CI).
 	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 	ws2 := t.TempDir()
 	_ = NewClaude().TriggerSpec(ws2, "q", "m", false)

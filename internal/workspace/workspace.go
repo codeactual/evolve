@@ -84,8 +84,7 @@ func New(parent, prefix string, skills []string, dirs []string, copies map[strin
 // diff against HEAD. Git runs insulated from operator and system configuration
 // — no signing, ignores, or identity leaks in — so workspace creation behaves
 // the same on any machine, including CI with no git identity at all. This is a
-// setup-time exec like the claude harness's Keychain bridge; agent execution
-// still goes through internal/runner only.
+// setup-time exec; agent execution still goes through internal/runner only.
 func initRepo(ws string) error {
 	env := append(os.Environ(),
 		"GIT_CONFIG_GLOBAL="+os.DevNull,

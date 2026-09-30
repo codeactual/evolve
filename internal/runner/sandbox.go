@@ -6,8 +6,8 @@ package runner
 import "path/filepath"
 
 // Sandbox confines an agent run's filesystem writes. When Enabled, every
-// command is wrapped in an OS sandbox (sandbox-exec on macOS, bubblewrap on
-// Linux) that permits writes everywhere EXCEPT ProtectedRoots — the source
+// command is wrapped in a bubblewrap sandbox that permits writes everywhere
+// EXCEPT ProtectedRoots — the source
 // repositories an escaping agent must never modify — with the per-run
 // workspace always re-permitted on top. Reads and the network stay
 // unrestricted on purpose: dependency tooling (go mod download, npm ci, uv
@@ -21,13 +21,13 @@ type Sandbox struct {
 	ProtectedRoots []string // dirs kept read-only to the agent (the workspace is always writable)
 }
 
-// wrap returns argv prefixed with the platform sandbox launcher confining
-// writes to everything but the protected roots, with workspace re-permitted. A
-// disabled sandbox returns argv unchanged. workspace is the directory the agent
-// runs in and is always writable (it is re-permitted even when it sits inside a
+// wrap returns argv prefixed with the bubblewrap launcher confining writes to
+// everything but the protected roots, with workspace re-permitted. A disabled
+// sandbox returns argv unchanged. workspace is the directory the agent runs in
+// and is always writable (it is re-permitted even when it sits inside a
 // protected root). wrap fails closed: an enabled sandbox that cannot be
-// constructed (missing helper binary, unsupported platform) returns an error
-// rather than silently running the agent unconfined.
+// constructed (missing bubblewrap) returns an error rather than silently
+// running the agent unconfined.
 func (s Sandbox) wrap(workspace string, argv []string) ([]string, error) {
 	if !s.Enabled {
 		return argv, nil
@@ -36,10 +36,9 @@ func (s Sandbox) wrap(workspace string, argv []string) ([]string, error) {
 }
 
 // resolvePath makes p absolute and resolves symlinks, so the rules match the
-// canonical path the kernel enforces against — $TMPDIR on macOS is a symlink
-// into /private/var/folders, and a rule written against the unresolved path
-// would never match. An unresolvable path (e.g. not yet created) falls back to
-// its absolute form.
+// canonical path the kernel enforces against — a rule written against a
+// symlinked path (a symlinked $TMPDIR, say) would never match. An unresolvable
+// path (e.g. not yet created) falls back to its absolute form.
 func resolvePath(p string) string {
 	if p == "" {
 		return ""
