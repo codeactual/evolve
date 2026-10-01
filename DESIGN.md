@@ -106,6 +106,19 @@ evolve exposes the validated binary at `/evolve/bin/bwrap` first on the sandbox'
 is unprofiled), so the CLIs' nested sandboxes use it too. `evolve doctor` reports the provenance verdict, an outer
 smoke run, the nested probe with this remedy, and whether `socat` is present.
 
+**A first-party-only surface.** evolve evaluates skills that are already on the filesystem (it never fetches one), so the
+agents are also kept from reaching outward through their own tools. `harness/local_only.go` owns the flags: Claude gets
+`--strict-mcp-config` and `--disallowedTools` for the in-process tools the sandbox's network allowlist does not govern
+(web fetch and search, remote triggers, push notifications, scheduling, messaging, design sync), plus
+`ENABLE_CLAUDEAI_MCP_SERVERS=false`; Codex gets `--disable` for its connector, plugin, browser, computer-use and
+image-generation features and `web_search="disabled"`. `--setting-sources user` is not used because it also stops the
+workspace's `.claude/skills` loading. The optional `harness.PostureChecker` capability verifies the result before a run:
+`run.CheckPosture` runs the harness's probe through the same runner, sandbox and environment as agent runs — Claude's real
+eval spec cancelled at its init event, Codex's `features list` — and fails on an outward tool, an unreviewed new tool
+(`claudeReviewedTools`), an MCP tool or server, a permission mode other than `bypassPermissions`, or a feature that is
+still enabled or no longer listed. `cmd/evolve` runs it once per harness per process before the sweep and in `doctor`.
+The static half is the Tier 0 `checks.local_only` check.
+
 **An allowlisted environment.** `runner.Run` builds the child environment from a baseline (`PATH`, `HOME`,
 `XDG_CONFIG_HOME`, locale, terminal, proxy and TLS names), the operator's `sandbox.env_passthrough`, and the spec's own
 entries; harnesses forward only the credential variables their CLI reads. `GITHUB_TOKEN`, `AWS_*` and the

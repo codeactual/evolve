@@ -85,6 +85,8 @@ operator is trusted. By default:
   `sandbox.claude_allowed_domains` or `sandbox.codex_network_access`. `evolve run` refuses to start when the nested
   sandboxes cannot start.
 - Agents get an **allowlisted environment**, not your whole shell.
+- Agents are kept **first-party only**: web, remote and messaging tools denied, MCP servers and connectors off, and
+  `evolve run` refuses to start if the CLI's session surface is not local-only (`evolve doctor` shows the posture).
 - `sandbox.*`, `cache_dir` and `telemetry.*` are **operator-only**: set them with flags, `EVOLVE_*` variables, or
   `~/.config/evolve/config.<ext>`. A repository `.evolve.<ext>` that sets them fails with exit 2.
 - The LLM judge runs in its own directory with a read-only view of the workspace and returns schema-constrained

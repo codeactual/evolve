@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/codeactual/evolve/internal/harness"
 	"github.com/codeactual/evolve/internal/layout"
 	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/run"
 	"github.com/codeactual/evolve/internal/runner"
 )
 
@@ -159,6 +161,100 @@ func sandboxDoctorLines(ctx context.Context) []string {
 		lines = append(lines, "socat: MISSING — Claude Code's sandbox needs it for network filtering (install socat)")
 	} else {
 		lines = append(lines, "socat: ok")
+	}
+	return lines
+}
+
+// checkPosture verifies one harness's local-only surface; a variable so tests can
+// fake the host.
+var checkPosture = run.CheckPosture
+
+var (
+	postureMu       sync.Mutex
+	postureVerdicts = map[string]error{}
+)
+
+// preflightPosture fails closed before any agent starts: every harness the run
+// will drive must present a local-only session surface (no web tools, remote
+// triggers, MCP servers, connectors or marketplace plugins). evolve evaluates
+// first-party skills that are already on the filesystem, so nothing outward is
+// wanted, and a CLI update that adds an outward tool or renames a flag fails here,
+// at the start of the run, instead of mid-sweep. One probe per harness per
+// process, since the verdict is a fact about the installed CLI.
+func preflightPosture(ctx context.Context, r run.Runner, selected []harness.Selection, inner model.InnerSandbox) error {
+	postureMu.Lock()
+	defer postureMu.Unlock()
+	done := map[string]bool{}
+	for _, sel := range selected {
+		id := sel.Harness.ID()
+		if done[id] {
+			continue
+		}
+		done[id] = true
+		verdict, seen := postureVerdicts[id]
+		if !seen {
+			cliModelID, _ := sel.Model.CLIModelID(id)
+			verdict = checkPosture(ctx, r, sel.Harness, cliModelID, inner, run.PostureTimeout)
+			postureVerdicts[id] = verdict
+		}
+		if verdict != nil {
+			return fmt.Errorf("the %s agent session is not local-only, so the run is refused: %w\n"+
+				"evolve runs first-party skills from the filesystem and keeps agents from reaching outward "+
+				"(web tools, remote triggers, MCP servers, connectors, marketplace plugins). "+
+				"Run `evolve doctor` for the full posture report", id, verdict)
+		}
+	}
+	return nil
+}
+
+// postureDoctorLines renders the doctor's posture section: for each installed
+// harness, whether its configured session surface is local-only.
+func postureDoctorLines(ctx context.Context, harnesses []harness.Harness) []string {
+	root := opts.Root
+	if root == "" {
+		root = "."
+	}
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs
+	}
+	r := &runner.Exec{EnvPassthrough: sandboxEnvPassthrough()}
+	note := ""
+	if sandboxEnabled(false) {
+		sb, err := runner.NewSandbox(sandboxConfig(root))
+		if err != nil {
+			return []string{fmt.Sprintf("posture checks skipped: the sandbox policy is invalid (%v)", err)}
+		}
+		if _, err := runner.ResolveBwrap(sb.BwrapPath); err != nil {
+			return []string{"posture checks skipped: bubblewrap is unavailable (see above)"}
+		}
+		r.Sandbox = sb
+		note = " (inside the sandbox)"
+	}
+	inner, err := innerSandboxConfig()
+	if err != nil {
+		return []string{fmt.Sprintf("posture checks skipped: %v", err)}
+	}
+	var lines []string
+	for _, h := range harnesses {
+		if _, ok := h.(harness.PostureChecker); !ok {
+			continue
+		}
+		if _, ok := harness.Available(h); !ok {
+			lines = append(lines, fmt.Sprintf("%s: skipped (CLI not on PATH)", h.ID()))
+			continue
+		}
+		cliModelID := ""
+		for _, m := range model.AllModels(nil) {
+			if id, ok := m.CLIModelID(h.ID()); ok {
+				cliModelID = id
+				break
+			}
+		}
+		if err := checkPosture(ctx, r, h, cliModelID, inner, run.PostureTimeout); err != nil {
+			lines = append(lines, fmt.Sprintf("%s: VIOLATION — %v", h.ID(), err))
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s: local-only%s", h.ID(), note))
 	}
 	return lines
 }

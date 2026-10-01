@@ -120,6 +120,7 @@ func claudeEnv(ws string) (env, readPaths []string) {
 		"CLAUDE_CONFIG_DIR=" + dir,
 		"DISABLE_AUTOUPDATER=1",
 	}
+	env = append(env, claudeLocalOnlyEnv...)
 	return append(env, forwardedEnv(claudeCredentialEnv)...), readPaths
 }
 
@@ -165,6 +166,7 @@ func (c *Claude) TriggerSpec(ws, query, cliModelID string, inner model.InnerSand
 		"--allowedTools", "Skill Read",
 		"--settings", claudeSandboxSettings(inner),
 	}
+	argv = append(argv, claudeLocalOnlyArgs()...)
 	env, readPaths := claudeEnv(ws)
 	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }
@@ -293,6 +295,7 @@ func (c *Claude) EvalSpec(ws string, in model.EvalInput, cliModelID string) mode
 		"--permission-mode", "bypassPermissions",
 		"--settings", claudeSandboxSettings(in.InnerSandbox),
 	}
+	argv = append(argv, claudeLocalOnlyArgs()...)
 	env, readPaths := claudeEnv(ws)
 	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }

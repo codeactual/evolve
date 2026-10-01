@@ -197,6 +197,7 @@ func TestCodexJudgeSpec(t *testing.T) {
 		"--output-schema", schemaPath,
 		"-c", "shell_environment_policy.ignore_default_excludes=false",
 	}
+	want = append(want, codexLocalOnlyArgs()...)
 	if !slices.Equal(spec.Argv, want) {
 		t.Errorf("judge argv =\n%v\nwant\n%v", spec.Argv, want)
 	}

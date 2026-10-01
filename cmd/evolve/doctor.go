@@ -83,6 +83,11 @@ var doctorCmd = &cobra.Command{
 			outf(cmd.OutOrStdout(), "  %s\n", line)
 		}
 
+		outln(cmd.OutOrStdout(), "\nAGENT POSTURE (no web tools, remote triggers, MCP servers, connectors or marketplace plugins)")
+		for _, line := range postureDoctorLines(cmd.Context(), harnesses) {
+			outf(cmd.OutOrStdout(), "  %s\n", line)
+		}
+
 		outf(cmd.OutOrStdout(), "\nLLM judge: %s\n", judgeStatus())
 
 		outf(cmd.OutOrStdout(), "\nVersion pin: %s\n", versionPinStatus())

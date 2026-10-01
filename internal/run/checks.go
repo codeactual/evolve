@@ -49,6 +49,7 @@ type CheckConfig struct {
 	MaxDescriptionRunes int      // skill description cap
 	PluginManifests     []string // plugin manifests every plugin must ship: "claude" and/or "codex"
 	Marketplace         bool     // validate marketplace manifests (marketplace layout only)
+	LocalOnly           bool     // fail on config that reaches outward: MCP servers, plugins, marketplaces, base URLs
 
 	Signals SignalConfig // tunables for the non-blocking skill-quality signals
 }
@@ -65,6 +66,7 @@ func DefaultCheckConfig() CheckConfig {
 		MaxDescriptionRunes: 1024,
 		PluginManifests:     []string{"claude", "codex"},
 		Marketplace:         true,
+		LocalOnly:           true,
 		Signals:             DefaultSignalConfig(),
 	}
 }
@@ -110,6 +112,9 @@ func Checks(repo *layout.Repo, cfg CheckConfig) ([]Finding, error) {
 		}
 	}
 	c.checkEvalSpecs()
+	if cfg.LocalOnly {
+		c.checkLocalOnly()
+	}
 	return c.findings, nil
 }
 
@@ -148,6 +153,81 @@ func (c *checker) checkEvalSpecs() {
 		if !isDir(set.SkillDir) {
 			c.errf("%s: evals/%s has no matching skill at %s",
 				c.repo.Rel(set.Plugin.Dir), set.Skill, c.repo.Rel(set.SkillDir))
+		}
+	}
+}
+
+// localOnlySettingsKeys are the project-settings keys that let a repository point
+// an agent at something outside it: MCP servers, plugins and marketplaces. Base
+// URL variables in an env block are checked separately.
+var localOnlySettingsKeys = []string{
+	"mcpServers", "enableAllProjectMcpServers", "enabledMcpjsonServers",
+	"enabledPlugins", "extraKnownMarketplaces",
+}
+
+// codexOutwardTable matches a Codex config table or key that configures MCP
+// servers, plugins or marketplaces.
+var codexOutwardTable = regexp.MustCompile(`(?m)^\s*\[?\s*(mcp_servers|plugins|marketplaces)\b`)
+
+// checkLocalOnly fails on anything in the repository that would let an agent under
+// test reach outside it: evolve evaluates first-party skills already on the
+// filesystem, and the agent flags (see internal/harness) enforce that at run time;
+// this is the static half, so the problem is caught before any agent starts. It
+// flags .mcp.json files, project settings that enable MCP servers, plugins or
+// marketplaces or redirect a base URL, plugin manifests that declare MCP servers,
+// and Codex config tables for MCP servers, plugins or marketplaces — anywhere in
+// the tree except .git, node_modules and vendor, since fixtures are copied into
+// agent workspaces.
+func (c *checker) checkLocalOnly() {
+	skip := map[string]bool{".git": true, "node_modules": true, "vendor": true}
+	_ = filepath.WalkDir(c.repo.Root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // unreadable entries are reported by the checks that need them
+		}
+		if d.IsDir() {
+			if skip[d.Name()] && path != c.repo.Root {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel := c.repo.Rel(path)
+		dir := filepath.Base(filepath.Dir(path))
+		switch {
+		case d.Name() == ".mcp.json":
+			c.errf("%s: MCP server config reaches outside the repository (checks.local_only)", rel)
+		case dir == ".claude" && (d.Name() == "settings.json" || d.Name() == "settings.local.json"):
+			c.checkLocalOnlySettings(path, rel)
+		case dir == ".claude-plugin" && d.Name() == "plugin.json", dir == ".codex-plugin" && d.Name() == "plugin.json":
+			if v, err := manifest.ReadJSON(path); err == nil {
+				if obj, ok := v.(map[string]any); ok && obj["mcpServers"] != nil {
+					c.errf("%s: declares mcpServers, which reach outside the repository (checks.local_only)", rel)
+				}
+			}
+		case dir == ".codex" && strings.HasSuffix(d.Name(), ".toml"):
+			if data, err := os.ReadFile(path); err == nil && codexOutwardTable.Match(data) {
+				c.errf("%s: Codex config enables MCP servers, plugins or marketplaces (checks.local_only)", rel)
+			}
+		}
+		return nil
+	})
+}
+
+func (c *checker) checkLocalOnlySettings(path, rel string) {
+	v, err := manifest.ReadJSON(path)
+	if err != nil {
+		c.errf("%s: %v", rel, err)
+		return
+	}
+	obj, _ := v.(map[string]any)
+	for _, key := range localOnlySettingsKeys {
+		if obj[key] != nil {
+			c.errf("%s: sets %s, which reaches outside the repository (checks.local_only)", rel, key)
+		}
+	}
+	env, _ := obj["env"].(map[string]any)
+	for name := range env {
+		if strings.HasSuffix(name, "_BASE_URL") {
+			c.errf("%s: env %s redirects an agent's API traffic to another host (checks.local_only)", rel, name)
 		}
 	}
 }

@@ -187,11 +187,12 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 	if err != nil {
 		return run.Options{}, err
 	}
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	exec := &runner.Exec{Sandbox: sandbox, EnvPassthrough: sandboxEnvPassthrough()}
 	if !f.CountOnly { // a count-only run starts no agent
-		ctx := cmd.Context()
-		if ctx == nil {
-			ctx = context.Background()
-		}
 		if err := preflightSandbox(ctx, sandbox); err != nil {
 			return run.Options{}, err
 		}
@@ -204,6 +205,11 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 	selected, err := opts.RunnableSelections(strings.Join(f.Models, ","), strings.Join(f.Harness, ","))
 	if err != nil {
 		return run.Options{}, err
+	}
+	if !f.CountOnly {
+		if err := preflightPosture(ctx, exec, selected, inner); err != nil {
+			return run.Options{}, err
+		}
 	}
 	warnings, err := opts.UnsupportedModelWarnings()
 	if err != nil {
@@ -231,7 +237,7 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 		Repo:           repo,
 		Selected:       selected,
 		Counter:        counter,
-		Runner:         &runner.Exec{Sandbox: sandbox, EnvPassthrough: sandboxEnvPassthrough()},
+		Runner:         exec,
 		InnerSandbox:   inner,
 		PluginFilter:   f.Plugin,
 		SkillFilter:    f.Skill,

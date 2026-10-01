@@ -54,6 +54,15 @@ CLIs they installed.
   basics, the credential variables their own CLI reads, and the names in `sandbox.env_passthrough` — not the operator's
   whole shell. `GITHUB_TOKEN`, `AWS_*` and evolve's `EVOLVE_*` token-counting keys never reach an agent. Codex also runs
   with its own `*KEY*`/`*SECRET*`/`*TOKEN*` shell-environment excludes on.
+- **A first-party-only agent surface.** evolve evaluates skills already on the filesystem, so agents are kept from
+  reaching outward through their own tools. Claude runs with `--strict-mcp-config` and its in-process web, remote-trigger,
+  push-notification, scheduling and messaging tools denied — those tools are not covered by the sandbox's network
+  allowlist, so denying them is the only control. Codex runs with its connector, plugin (including the remote catalog and
+  sharing), MCP-dependency-install, browser, computer-use and image-generation features disabled and web search off.
+  Before any agent starts, `evolve run` runs a posture probe for each harness it will drive (Claude's is cancelled at its
+  session init event and costs no tokens; Codex's lists its feature table) and exits 2 if the surface is not local-only
+  — including a tool the CLI added since the surface was reviewed. The Tier 0 `checks.local_only` check rejects `.mcp.json`
+  files and project or Codex config that enable MCP servers, plugins or marketplaces, or redirect a base URL.
 - **A hardened LLM judge.** The judge runs in its own directory with its own fresh CLI config home, a read-only view of
   the workspace it grades, no code-running tools, hooks, MCP servers or project settings, and returns schema-constrained
   structured output that is decoded strictly. The agent's output and the expected-output text are quoted inside
@@ -85,6 +94,12 @@ These are known and accepted; evolve does not claim to close them.
   `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` would strip them from its tool subprocesses, but in claude 2.1.285 it forces the
   permission mode to default, which ends the prompts-off eval posture, so evolve does not set it. A file-based login
   never reaches the environment.
+- **Some outward surface remains.** Claude's bundled skills (16 in claude 2.1.285) cannot be removed without disabling
+  the skill under test, and claude.ai account connectors are opted out with `ENABLE_CLAUDEAI_MCP_SERVERS=false` plus
+  `--strict-mcp-config`, but none was ever listed at session start on the verification host, so those two are asserted
+  by the posture probe rather than shown to work. Project settings hooks in a fixture still run (they are local), and
+  `--setting-sources user`, which would drop fixture settings, is unusable because it also stops project skills loading.
+  The agent process itself keeps its network access.
 - **An LLM judge can still be persuaded.** The judge's attack surface is removed, but persuasive agent output or
   workspace content can still influence an LLM grader's verdicts; no design makes one immune.
 - **evolve trusts your `PATH`** for `claude`, `codex` and `git`, and a validated `sandbox.bwrap_path`. An earlier

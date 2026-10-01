@@ -107,6 +107,13 @@ permission prompts off. Containment is the control (Linux only):
   for triggers and `workspace-write` for evals. Agent shell commands get no network by default; opt in with
   `sandbox.claude_allowed_domains` and `sandbox.codex_network_access`. `evolve run` exits `2` before any agent starts if
   the nested sandboxes cannot start.
+- **First-party only.** evolve evaluates skills already on the filesystem, so agents are kept from reaching outward.
+  Claude runs with `--strict-mcp-config` and its web, remote-trigger, push-notification, scheduling and messaging tools
+  denied; Codex runs with its connector, plugin, browser, computer-use and image-generation features disabled and web
+  search off. `evolve run` probes each harness it will drive before any agent starts and exits `2` if the session surface
+  is not local-only (an outward tool, an unreviewed new tool, an MCP server, or a changed permission mode); `evolve doctor`
+  prints the same verdict in an `AGENT POSTURE` section. The `checks.local_only` Tier 0 check fails on a repository that
+  carries `.mcp.json` files, project settings that enable MCP servers, plugins or marketplaces, or Codex config for them.
 - **Environment.** Agents get an allowlisted environment (`PATH`, `HOME`, locale, terminal, proxy and TLS variables,
   the credential variables their own CLI reads, and names you list in `sandbox.env_passthrough`), not your whole shell.
 - **Operator-only keys.** `sandbox.*`, `cache_dir` and `telemetry.*` come only from flags, `EVOLVE_*` environment

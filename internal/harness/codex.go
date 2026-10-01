@@ -114,6 +114,7 @@ func (c *Codex) TriggerSpec(ws, query, cliModelID string, _ model.InnerSandbox) 
 		"--sandbox", "read-only",
 	}
 	argv = append(argv, codexShellEnvPolicy...)
+	argv = append(argv, codexLocalOnlyArgs()...)
 	env, readPaths := codexEnv(ws)
 	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }
@@ -132,19 +133,16 @@ func (c *Codex) ScanLine(line []byte, skill, _ string) (bool, string) {
 // workspace, so a Codex agent cannot commit.
 func (c *Codex) EvalSpec(ws string, in model.EvalInput, cliModelID string) model.CommandSpec {
 	env, readPaths := codexEnv(ws)
-	return model.CommandSpec{
-		Argv: []string{
-			"codex", "exec", in.Prompt,
-			"--json", "--skip-git-repo-check",
-			"--sandbox", "workspace-write",
-			"-c", "sandbox_workspace_write.network_access=" + strconv.FormatBool(in.InnerSandbox.CodexNetworkAccess),
-			"-c", "shell_environment_policy.ignore_default_excludes=false",
-			"-m", cliModelID,
-		},
-		Dir:       ws,
-		Env:       env,
-		ReadPaths: readPaths,
+	argv := []string{
+		"codex", "exec", in.Prompt,
+		"--json", "--skip-git-repo-check",
+		"--sandbox", "workspace-write",
+		"-c", "sandbox_workspace_write.network_access=" + strconv.FormatBool(in.InnerSandbox.CodexNetworkAccess),
+		"-c", "shell_environment_policy.ignore_default_excludes=false",
+		"-m", cliModelID,
 	}
+	argv = append(argv, codexLocalOnlyArgs()...)
+	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }
 
 // judgeSchemaFile is the verdict schema's file name inside the judge directory.
@@ -170,6 +168,7 @@ func (c *Codex) JudgeSpec(judgeDir string, in model.JudgeInput, cliModelID strin
 		"--output-schema", schemaPath,
 	}
 	argv = append(argv, codexShellEnvPolicy...)
+	argv = append(argv, codexLocalOnlyArgs()...)
 	return model.CommandSpec{
 		Argv: argv, Dir: judgeDir, Env: env,
 		ReadPaths: append(readPaths, in.Workspace),

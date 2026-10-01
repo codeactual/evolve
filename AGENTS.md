@@ -57,7 +57,8 @@ reference outputs `TestGenerateGolden` compares against; regenerate them with `g
   token-counting clients. The lowest-level domain package (imports no other internal package); owns the shared value
   types `CommandSpec`, `EvalInput`, `Usage`.
 - `harness` — the agent CLIs evolve drives (Claude Code and Codex): runner-CLI command construction (including the
-  always-on inner sandbox settings and the judge specs), output parsing, the optional `EvalRunner` and `OfferedModels`
+  always-on inner sandbox settings, the judge specs, and `local_only.go`: the first-party-only flags and the
+  `PostureChecker` probes), output parsing, the optional `EvalRunner` and `OfferedModels`
   capabilities (the latter probes
   which models the operator's installed CLI actually serves, so the TUI can deselect the rest by default), and
   `Selection`/`RunnableHarness` that bind a model to the one harness that runs it (evals run once per model, never once
