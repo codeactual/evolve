@@ -102,6 +102,10 @@ raise it when you want to separate a flaky skill from a decisive one — `--runs
 - **A query passes when its hit-rate falls on the expected side of 50%:** `≥ 0.5` when `should_trigger` is `true`,
   `< 0.5` when it is `false`. So a `should_trigger: true` query with 3-of-5 hits passes; a `should_trigger: false` query
   needs a _minority_ of hits.
+- **A run that errors is neither.** When the agent exits non-zero without activating the skill (an authentication
+  failure, a model the account cannot use), it never saw the query, so it is no evidence of a miss. Any such run fails
+  its query whatever `should_trigger` says, the report shows `errored=N/runs`, and the agent's stderr tail is printed as
+  a warning. Without this rule a harness that failed every run would pass every `should_trigger: false` query.
 - **The skill's per-model trigger score is the share of queries that passed.** Reports break it down so you can see
   exactly which query dragged it down.
 

@@ -292,6 +292,78 @@ func TestTriggersDetectsFailures(t *testing.T) {
 	}
 }
 
+// erroringTriggerRunner models an agent CLI that exits non-zero before it ever
+// answers (an authentication or unsupported-model error): no activation line,
+// exit status 1.
+type erroringTriggerRunner struct{}
+
+func (erroringTriggerRunner) Run(context.Context, model.CommandSpec, time.Duration, *runner.Scan) (runner.Result, error) {
+	return runner.Result{ExitCode: 1, StderrTail: "401 Unauthorized", Elapsed: time.Second}, nil
+}
+
+// killedAfterHitRunner models the scan-mode early exit: the runner kills the
+// agent as soon as the activation line appears, so the exit status is -1.
+type killedAfterHitRunner struct{}
+
+func (killedAfterHitRunner) Run(_ context.Context, _ model.CommandSpec, _ time.Duration, scan *runner.Scan) (runner.Result, error) {
+	hit := scan.OnLine([]byte("ACTIVATE:solo-skill"))
+	return runner.Result{Hit: hit, ExitCode: -1, Elapsed: time.Second}, nil
+}
+
+// TestTriggersFailQueriesWhoseRunsErrored: an agent run that exits non-zero
+// without activating the skill never saw the query, so it is no evidence of a
+// non-trigger. Before the fix every such run counted as a clean miss, so a
+// harness that failed every run (here a 401) passed all its should-not-trigger
+// queries.
+func TestTriggersFailQueriesWhoseRunsErrored(t *testing.T) {
+	repo := triggerRepoFixture(t)
+	opts := triggerOptions(t, repo, &fakeTriggerProvider{})
+	opts.Runner = erroringTriggerRunner{}
+	var stdout, stderr bytes.Buffer
+	opts.Stdout, opts.Stderr = &stdout, &stderr
+
+	failed, err := Triggers(context.Background(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !failed {
+		t.Error("failed = false, want true when every agent run errored")
+	}
+	file, _, _ := results.LoadDir(filepath.Join(repo.Root, "evals", "solo-skill"), "solo", "solo-skill")
+	entry := file.Trigger("fake/model-1")
+	if entry == nil || len(entry.Results) != 2 {
+		t.Fatalf("entry = %+v", entry)
+	}
+	for i, r := range entry.Results {
+		if *r.Passed {
+			t.Errorf("query %d passed although every run errored: %+v", i, r)
+		}
+	}
+	out := stdout.String() + stderr.String()
+	for _, want := range []string{"errored", "401 Unauthorized"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestTriggersCountHitDespiteKillExit: the early-exit kill after a hit ends the
+// process with a non-zero status, which must still count as a hit.
+func TestTriggersCountHitDespiteKillExit(t *testing.T) {
+	repo := triggerRepoFixture(t)
+	opts := triggerOptions(t, repo, &fakeTriggerProvider{})
+	opts.Runner = killedAfterHitRunner{}
+
+	if _, err := Triggers(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	file, _, _ := results.LoadDir(filepath.Join(repo.Root, "evals", "solo-skill"), "solo", "solo-skill")
+	r0 := file.Trigger("fake/model-1").Results[0]
+	if *r0.Hits != 3 || !*r0.Passed {
+		t.Errorf("hit with a kill exit status = %+v, want 3 hits and passed", r0)
+	}
+}
+
 func TestTriggersNewSkipsCompleteEntries(t *testing.T) {
 	repo := triggerRepoFixture(t)
 	opts := triggerOptions(t, repo, &countingTriggerProvider{fakeTriggerProvider{priced: true}})

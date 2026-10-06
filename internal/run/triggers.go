@@ -235,6 +235,7 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 	type outcome struct {
 		index   int
 		hit     bool
+		errored bool
 		seconds float64
 	}
 	outcomes := make(chan outcome)
@@ -242,6 +243,7 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 	collectorDone := make(chan bool)
 	go func() {
 		hits := make([]int, len(triggers))
+		errs := make([]int, len(triggers))
 		elapsed := make([]float64, len(triggers))
 		remaining := make([]int, len(triggers))
 		for i := range remaining {
@@ -251,6 +253,9 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 		for o := range outcomes {
 			if o.hit {
 				hits[o.index]++
+			}
+			if o.errored {
+				errs[o.index]++
 			}
 			elapsed[o.index] += o.seconds
 			remaining[o.index]--
@@ -264,6 +269,11 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 			passed := rate < 0.5
 			if expected {
 				passed = rate >= 0.5
+			}
+			// A run that errored never saw the query, so it is no evidence for
+			// either outcome: a query with any such run cannot pass.
+			if errs[i] > 0 {
+				passed = false
 			}
 			failed = failed || !passed
 			h, r := hits[i], opts.Runs
@@ -279,12 +289,16 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 			if expected {
 				expect = "yes"
 			}
+			detail := fmt.Sprintf("rate=%.2f avg=%.1fs expect=%s %s",
+				rate, avg, expect, truncate(triggers[i].Query, 70))
+			if errs[i] > 0 {
+				detail = fmt.Sprintf("errored=%d/%d %s", errs[i], opts.Runs, detail)
+			}
 			rep.ItemDone(ref, ItemResult{
 				Index:  i,
 				Label:  triggers[i].Query,
 				Status: status,
-				Detail: fmt.Sprintf("rate=%.2f avg=%.1fs expect=%s %s",
-					rate, avg, expect, truncate(triggers[i].Query, 70)),
+				Detail: detail,
 				Metrics: plan.ItemMetrics{
 					Hits: &h, Runs: &r, AvgRunSeconds: &avg,
 					InputTokens: estTokens(entryResults[i].Estimate),
@@ -320,14 +334,20 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 				if err != nil {
 					return err
 				}
+				detail := ""
+				if res.StderrTail != "" {
+					detail = "; stderr tail: " + tail(res.StderrTail, 300)
+				}
 				if res.TimedOut {
-					detail := ""
-					if res.StderrTail != "" {
-						detail = "; stderr tail: " + tail(res.StderrTail, 300)
-					}
 					rep.Warn("  warn: runner timed out; counted as no-trigger%s\n", detail)
 				}
-				outcomes <- outcome{index: i, hit: res.Hit, seconds: res.Elapsed.Seconds()}
+				// The runner kills the agent on a hit, so a non-zero exit status
+				// only signals failure when no activation was seen.
+				errored := !res.Hit && !res.TimedOut && res.ExitCode != 0
+				if errored {
+					rep.Warn("  warn: agent run errored (exit %d); not counted as a no-trigger%s\n", res.ExitCode, detail)
+				}
+				outcomes <- outcome{index: i, hit: res.Hit, errored: errored, seconds: res.Elapsed.Seconds()}
 				return nil
 			})
 		}
