@@ -36,8 +36,8 @@ evolve confines every agent run in a bubblewrap sandbox, and the agent CLIs nest
 > The copy does not follow package upgrades of bubblewrap; refresh it by hand. evolve exposes the validated binary
 > first on the sandbox's `PATH`, so the agent CLIs' nested sandboxes use the same copy.
 
-The versions the sandbox behavior was verified against are `claude` 2.1.285 and `codex` 0.159.2. evolve does not gate on
-a CLI version: an older CLI that lacks a flag evolve passes fails per case with its own unknown-option error.
+The versions the sandbox behavior was verified against (on 2026-10-05) are `claude` 2.1.289 and `codex` 0.160.0. evolve
+does not gate on a CLI version: an older CLI that lacks a flag evolve passes fails per case with its own unknown-option error.
 
 ## Verify the environment
 

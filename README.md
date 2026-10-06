@@ -51,7 +51,7 @@ Built-in harnesses, each needing its runner CLI on `PATH` and whatever credentia
 
 Run `evolve doctor` from a plugin repository to check the environment, credentials, runner CLIs and the sandbox, and
 `evolve models` to see the effective provider / model / harness matrix. The sandbox behavior was verified with `claude`
-2.1.285 and `codex` 0.159.2; evolve does not gate on a CLI version.
+2.1.289 and `codex` 0.160.0 (on 2026-10-05); evolve does not gate on a CLI version.
 
 ## Install
 
