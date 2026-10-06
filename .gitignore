@@ -8,3 +8,5 @@
 /.claude/plans/
 **/.claude/plans/
 *.local.*
+
+/.mise/
