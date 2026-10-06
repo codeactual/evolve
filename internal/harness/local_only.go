@@ -30,18 +30,26 @@ import (
 // sandbox's network allowlist, so denying them is the only control.
 //
 // The names are those of claude 2.1.285 (observed in a real session's init
-// event on 2026-09-30); a CLI update that adds an outward tool fails the posture
-// preflight (see claudeReviewedTools) rather than slipping through.
+// event on 2026-09-30), plus Workflow. Workflow runs a script that orchestrates
+// many background subagents (https://code.claude.com/docs/en/tools-reference),
+// a fan-out the posture review never covered and an eval session never needs, so
+// it is denied. claude lists it at init only where dynamic workflows are enabled
+// (an account and settings matter, https://code.claude.com/docs/en/workflows):
+// it was seen on claude 2.1.287, and claude 2.1.289 on the 2026-10-05
+// verification host did not list it. A CLI update that adds another outward tool
+// fails the posture preflight (see claudeReviewedTools) rather than slipping
+// through.
 var claudeOutwardTools = []string{
 	"WebFetch", "WebSearch", "RemoteTrigger", "PushNotification",
 	"CronCreate", "CronDelete", "CronList", "ScheduleWakeup",
-	"SendMessage", "ListAgents", "DesignSync",
+	"SendMessage", "ListAgents", "DesignSync", "Workflow",
 }
 
 // claudeReviewedTools are the built-in tools a local-only agent session may
 // list at init: everything claude 2.1.285 exposes after the deny list above, plus
-// Glob and Grep, which other builds list. The posture preflight fails on any
-// tool outside this set, so a new tool arrives as a reviewed decision.
+// Glob and Grep, which other builds list. claude 2.1.289 lists a subset of these
+// (checked 2026-10-05). The posture preflight fails on any tool outside this
+// set, so a new tool arrives as a reviewed decision.
 var claudeReviewedTools = []string{
 	"Task", "Bash", "Edit", "EnterWorktree", "ExitWorktree", "Monitor", "NotebookEdit",
 	"Read", "ReportFindings", "Skill", "TaskCreate", "TaskGet", "TaskList", "TaskStop",

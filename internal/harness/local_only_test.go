@@ -112,6 +112,27 @@ func TestClaudePostureRejects(t *testing.T) {
 	}
 }
 
+// TestClaudeLocalOnlyDeniesWorkflow pins the classification of the Workflow tool,
+// which runs scripts that orchestrate many background subagents. claude lists it
+// at init on accounts where dynamic workflows are enabled. It was unclassified,
+// so the posture preflight refused every run there with "new and has not been
+// reviewed". It must be denied outright instead.
+func TestClaudeLocalOnlyDeniesWorkflow(t *testing.T) {
+	c := NewClaude()
+	err := c.CheckPosture(claudeInitLine(claudeGoodTools+`,"Workflow"`, "[]", "bypassPermissions"))
+	if err != nil && strings.Contains(err.Error(), "new and has not been reviewed") {
+		t.Errorf("CheckPosture = %v, want Workflow classified, not left unreviewed", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "outward tool Workflow") {
+		t.Errorf("CheckPosture = %v, want Workflow reported as an outward tool that --disallowedTools failed to remove", err)
+	}
+	args := claudeLocalOnlyArgs()
+	i := slices.Index(args, "--disallowedTools")
+	if i < 0 || !slices.Contains(strings.Fields(args[i+1]), "Workflow") {
+		t.Errorf("claudeLocalOnlyArgs = %v, want Workflow in the --disallowedTools value", args)
+	}
+}
+
 func codexFeatureTable(overrides map[string]string) []byte {
 	var b strings.Builder
 	for _, f := range codexOutwardFeatures {
