@@ -6,22 +6,18 @@ package harness
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
-	"os/user"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // Claude drives the `claude` CLI (Claude Code).
@@ -45,14 +41,52 @@ func NewClaude() *Claude {
 	}}
 }
 
-// claudeSandboxOff disables Claude Code's own Bash-tool OS sandbox via an inline
-// settings override. evolve confines the whole `claude` process in its own
-// sandbox, and Claude's Bash sandbox uses macOS Seatbelt, which cannot nest — so
-// without this every Bash command in the agent dies with "Operation not
-// permitted". It is passed only when evolve's sandbox is active (HostSandboxed);
-// with evolve unconfined, Claude keeps its own sandbox. A managed-settings.json
-// that forces the sandbox on still wins, so those hosts must use --no-sandbox.
-const claudeSandboxOff = `{"sandbox":{"enabled":false}}`
+// claudeSandboxSettings renders the inline --settings JSON that turns Claude
+// Code's own Bash-tool OS sandbox on, fail-closed, inside evolve's outer
+// sandbox (the layers nest on Linux, where both use bubblewrap):
+//
+//   - enabled turns the sandbox on. It is off by default, and evolve's isolated
+//     CLAUDE_CONFIG_DIR hides the operator's user settings, so without this
+//     Claude would never sandbox Bash under evolve.
+//   - failIfUnavailable makes a sandbox that cannot start (no bubblewrap or
+//     socat, or no nested user namespaces) an error instead of a warning.
+//   - allowUnsandboxedCommands=false removes the dangerouslyDisableSandbox
+//     retry that would let a command run outside it.
+//   - network.allowedDomains lists the hosts Bash commands may reach; empty
+//     means none. The sandbox runtime (srt) cannot express "allow all".
+//   - network.strictAllowlist denies any other host deterministically: a
+//     headless run cannot answer the approval prompt srt would otherwise raise.
+//
+// Keys verified 2026-09-30 against the settings schema embedded in claude
+// 2.1.285 (the Zod definitions in its binary: each description names --settings
+// as a honored source for strictAllowlist and allowUnsandboxedCommands) and the
+// sandboxing docs at https://code.claude.com/docs/en/sandboxing.
+func claudeSandboxSettings(in model.InnerSandbox) string {
+	type network struct {
+		AllowedDomains  []string `json:"allowedDomains"`
+		StrictAllowlist bool     `json:"strictAllowlist"`
+	}
+	type sandbox struct {
+		Enabled                  bool    `json:"enabled"`
+		FailIfUnavailable        bool    `json:"failIfUnavailable"`
+		AllowUnsandboxedCommands bool    `json:"allowUnsandboxedCommands"`
+		Network                  network `json:"network"`
+	}
+	domains := in.ClaudeAllowedDomains
+	if domains == nil {
+		domains = []string{} // marshal as [], never null
+	}
+	out, err := json.Marshal(struct {
+		Sandbox sandbox `json:"sandbox"`
+	}{sandbox{
+		Enabled: true, FailIfUnavailable: true, AllowUnsandboxedCommands: false,
+		Network: network{AllowedDomains: domains, StrictAllowlist: true},
+	}})
+	if err != nil { // plain strings and bools: cannot happen
+		panic(err)
+	}
+	return string(out)
+}
 
 // claudeConfigRel is the workspace-relative CLAUDE_CONFIG_DIR evolve gives the
 // claude CLI. Sessions, project history, and auto-memory live here so runs do
@@ -61,92 +95,58 @@ const claudeSandboxOff = `{"sandbox":{"enabled":false}}`
 const claudeConfigRel = ".evolve/claude-home"
 
 // claudeEnv returns the process env extras that point a claude invocation in
-// ws at a throwaway workspace-rooted config dir.
-func claudeEnv(ws string) []string {
+// ws at a throwaway workspace-rooted config dir, and the operator files the
+// run reads through that dir (the bridged credentials), which a sandboxed run
+// must bind read-only.
+//
+// Credentials are the one thing the agent process needs from the operator's
+// environment: only the variables the claude CLI itself reads are forwarded,
+// and only when set.
+//
+// CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, which would strip those credentials from
+// the tool subprocesses' environment, is deliberately NOT set: in claude 2.1.285
+// it forces the permission mode to default whatever --permission-mode says
+// (Claude Code's "allowed_non_write_users hardening"), which would end the
+// prompts-off eval posture and deny every tool the eval did not list in
+// --allowedTools. Verified live on 2026-09-30. A credential the operator
+// exports is therefore visible to Claude's shell commands; a file-based login
+// (the default) never reaches the environment at all.
+func claudeEnv(ws string) (env, readPaths []string) {
 	dir := isolatedDir(ws, claudeConfigRel)
-	ensureClaudeConfig(dir)
-	return []string{
+	if target := ensureClaudeConfig(dir); target != "" {
+		readPaths = append(readPaths, target)
+	}
+	env = []string{
 		"CLAUDE_CONFIG_DIR=" + dir,
 		"DISABLE_AUTOUPDATER=1",
 	}
+	env = append(env, claudeLocalOnlyEnv...)
+	return append(env, forwardedEnv(claudeCredentialEnv)...), readPaths
 }
 
+// claudeCredentialEnv are the variables the claude CLI reads to authenticate.
+// The EVOLVE_-prefixed keys are token-counting credentials and never reach it.
+var claudeCredentialEnv = []string{"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN"}
+
 // ensureClaudeConfig creates the isolated config dir, seeds the state file,
-// and links the operator's OAuth credentials. macOS stores those in the
-// Keychain (global, no bridging needed); Linux keeps .credentials.json beside
-// the config, so the link is what carries auth there. Best-effort per the
-// isolate.go contract.
-func ensureClaudeConfig(dir string) {
+// and links the operator's OAuth credentials: Claude keeps .credentials.json
+// beside its config, so the link is what carries auth. It returns the real
+// path of the linked credentials file ("" when none is linked). Best-effort per
+// the isolate.go contract.
+func ensureClaudeConfig(dir string) string {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return
+		return ""
 	}
 	seedClaudeState(dir)
 	opDir := operatorDir("CLAUDE_CONFIG_DIR", ".claude")
-	dst := filepath.Join(dir, ".credentials.json")
-	linkFile(filepath.Join(opDir, ".credentials.json"), dst)
-	bridgeClaudeKeychain(opDir, dst)
-}
-
-// claudeKeychainService is the macOS Keychain service name the claude CLI uses
-// for the OAuth credentials of a given config dir. The CLI namespaces the
-// entry per config dir — "Claude Code-credentials-" + the first 8 hex chars of
-// sha256(dir) — so a claude run pointed at an isolated CLAUDE_CONFIG_DIR can
-// never see the operator's entry. Observed against claude 2.1.220 by shimming
-// `security` and diffing the find-generic-password service across config dirs.
-func claudeKeychainService(dir string) string {
-	sum := sha256.Sum256([]byte(dir))
-	return "Claude Code-credentials-" + hex.EncodeToString(sum[:4])
-}
-
-// bridgeClaudeKeychain (macOS) copies the operator's Keychain-held OAuth
-// payload into the isolated config dir's .credentials.json — the CLI falls
-// back to that file when its per-config-dir Keychain entry is missing (see
-// claudeKeychainService), which is exactly the isolated case. The legacy
-// unsuffixed service name covers installs that logged in before the CLI
-// namespaced its entries. Skipped when a credential env var the CLI itself
-// reads already authenticates the run (the EVOLVE_-prefixed variables are
-// token-counting credentials and deliberately never reach the CLI), when the
-// file exists (bridged from an operator .credentials.json), or off darwin;
-// best-effort like the rest of isolate.go.
-//
-// This is the one exec outside internal/runner: the payload lives in the
-// Keychain, not in a file, and /usr/bin/security is the claude CLI's own
-// storage mechanism, so reading it back the same way is the only bridge
-// available. Harness specs stay pure — this is setup, not agent execution.
-func bridgeClaudeKeychain(opDir, dst string) {
-	if runtime.GOOS != "darwin" || opDir == "" {
-		return
-	}
-	for _, k := range []string{"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN"} {
-		if os.Getenv(k) != "" {
-			return
-		}
-	}
-	if _, err := os.Lstat(dst); err == nil {
-		return
-	}
-	u, err := user.Current()
-	if err != nil || u.Username == "" {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	for _, service := range []string{claudeKeychainService(opDir), "Claude Code-credentials"} {
-		out, err := exec.CommandContext(ctx, "/usr/bin/security",
-			"find-generic-password", "-a", u.Username, "-w", "-s", service).Output()
-		if err != nil || len(bytes.TrimSpace(out)) == 0 {
-			continue
-		}
-		_ = os.WriteFile(dst, out, 0o600)
-		return
-	}
+	return linkFile(filepath.Join(opDir, ".credentials.json"), filepath.Join(dir, ".credentials.json"))
 }
 
 // seedClaudeState writes the isolated .claude.json (with CLAUDE_CONFIG_DIR
 // set, the state file lives inside the config dir) with onboarding marked done
 // so headless -p runs never stall on first-run prompts. Nothing else carries
-// over: logged-in state is purely a matter of reachable credentials (env var,
-// .credentials.json, or the Keychain bridge), and the operator's session
+// over: logged-in state is purely a matter of reachable credentials (env var
+// or .credentials.json), and the operator's session
 // history, project state, and caches deliberately stay behind.
 func seedClaudeState(dir string) {
 	state := filepath.Join(dir, ".claude.json")
@@ -155,7 +155,8 @@ func seedClaudeState(dir string) {
 	}
 }
 
-func (c *Claude) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) model.CommandSpec {
+// TriggerSpec builds the headless `claude -p` command for one trigger query.
+func (c *Claude) TriggerSpec(ws, query, cliModelID string, inner model.InnerSandbox) model.CommandSpec {
 	argv := []string{
 		"claude", "-p", query,
 		"--model", cliModelID,
@@ -163,11 +164,11 @@ func (c *Claude) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) m
 		"--verbose",
 		"--max-turns", "2",
 		"--allowedTools", "Skill Read",
+		"--settings", claudeSandboxSettings(inner),
 	}
-	if hostSandboxed {
-		argv = append(argv, "--settings", claudeSandboxOff)
-	}
-	return model.CommandSpec{Argv: argv, Dir: ws, Env: claudeEnv(ws)}
+	argv = append(argv, claudeLocalOnlyArgs()...)
+	env, readPaths := claudeEnv(ws)
+	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }
 
 // claudeContentBlock is one content block of a Claude message in stream-json
@@ -218,6 +219,9 @@ type claudeEvent struct {
 	Usage         *claudeUsage     `json:"usage"`
 	TotalCostUSD  *float64         `json:"total_cost_usd"`
 	RateLimitInfo *claudeRateLimit `json:"rate_limit_info"`
+	// StructuredOutput is the object a --json-schema run validated and returned,
+	// verbatim, on its result event.
+	StructuredOutput json.RawMessage `json:"structured_output"`
 }
 
 // scanEvents walks Claude Code's stream-json output once: it returns the
@@ -227,7 +231,7 @@ type claudeEvent struct {
 // mid-session, so last is authoritative; nil when none appeared).
 // ParseEvalOutput, ParseToolCalls, and RuntimeError each project from it.
 func scanEvents(stdout []byte) (result claudeEvent, found bool, tools []model.ToolCall, rateLimit *claudeRateLimit) {
-	for _, line := range bytes.Split(stdout, []byte{'\n'}) {
+	for line := range bytes.SplitSeq(stdout, []byte{'\n'}) {
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
@@ -274,8 +278,9 @@ func (c *Claude) ScanLine(line []byte, skill, _ string) (bool, string) {
 
 // EvalSpec runs claude with permissions bypassed: evals grade what the agent
 // builds, not what a tool allowlist happens to permit, and confinement comes
-// from the sandbox (evolve's when HostSandboxed, Claude Code's own Bash
-// sandbox otherwise) rather than from permission prompts.
+// from the layered sandboxes (evolve's outer one, and Claude Code's own Bash
+// sandbox inside it, see claudeSandboxSettings) rather than from permission
+// prompts.
 func (c *Claude) EvalSpec(ws string, in model.EvalInput, cliModelID string) model.CommandSpec {
 	maxTurns := in.MaxTurns
 	if maxTurns == 0 {
@@ -288,11 +293,76 @@ func (c *Claude) EvalSpec(ws string, in model.EvalInput, cliModelID string) mode
 		"--verbose",
 		"--max-turns", strconv.Itoa(maxTurns),
 		"--permission-mode", "bypassPermissions",
+		"--settings", claudeSandboxSettings(in.InnerSandbox),
 	}
-	if in.HostSandboxed {
-		argv = append(argv, "--settings", claudeSandboxOff)
+	argv = append(argv, claudeLocalOnlyArgs()...)
+	env, readPaths := claudeEnv(ws)
+	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
+}
+
+// JudgeSpec builds the grading session. The judge reads the workspace it grades
+// and nothing else can be trusted to stay put, so it runs with every path that
+// content under test could use to act through it closed:
+//
+//   - its own directory (never the workspace) and its own fresh CLAUDE_CONFIG_DIR
+//     under that directory, so an agent-planted user-level settings.json,
+//     apiKeyHelper or env block is never loaded;
+//   - --restricted: no code-running tools, user/project/local settings ignored,
+//     file tools confined to the working directory plus --add-dir, and
+//     bypassPermissions refused;
+//   - --safe-mode: no CLAUDE.md, skills, plugins, hooks, MCP servers or custom
+//     commands from the workspace;
+//   - --tools Read,Grep,Glob and --permission-mode dontAsk: reads only, anything
+//     else denied;
+//   - --json-schema: the verdicts arrive as validated structured output.
+//
+// Confirmed live against claude 2.1.285 (2026-09-30): with --restricted and
+// --tools Read,Grep,Glob the session's init event lists exactly Glob, Grep, Read
+// and StructuredOutput, in permissionMode dontAsk. The judge workspace is
+// exposed through --add-dir and, inside evolve's sandbox, bound read-only.
+func (c *Claude) JudgeSpec(judgeDir string, in model.JudgeInput, cliModelID string) model.CommandSpec {
+	argv := []string{
+		"claude", "-p", in.Prompt,
+		"--model", cliModelID,
+		"--output-format", "stream-json",
+		"--verbose",
+		"--max-turns", strconv.Itoa(in.MaxTurns),
+		"--restricted", "--safe-mode", "--strict-mcp-config",
+		"--tools", "Read,Grep,Glob",
+		"--permission-mode", "dontAsk",
+		"--add-dir", in.Workspace,
+		"--json-schema", in.Schema,
 	}
-	return model.CommandSpec{Argv: argv, Dir: ws, Env: claudeEnv(ws)}
+	env, readPaths := claudeEnv(judgeDir)
+	return model.CommandSpec{
+		Argv: argv, Dir: judgeDir, Env: env,
+		ReadPaths: append(readPaths, in.Workspace),
+	}
+}
+
+// ParseJudgeOutput returns the verdicts object from the result event: the
+// validated structured_output when present, otherwise the result text if it is
+// itself the whole JSON object. There is no substring scan, so a verdict block
+// quoted from the content under test can never stand in for the judge's answer.
+func (c *Claude) ParseJudgeOutput(stdout []byte) ([]byte, error) {
+	result, found, _, _ := scanEvents(stdout)
+	if !found {
+		return nil, errors.New("no result event in the judge's output")
+	}
+	if len(bytes.TrimSpace(result.StructuredOutput)) > 0 && !bytes.Equal(bytes.TrimSpace(result.StructuredOutput), []byte("null")) {
+		return bytes.TrimSpace(result.StructuredOutput), nil
+	}
+	return wholeJSONObject(result.Result)
+}
+
+// wholeJSONObject accepts text only when it is, after trimming whitespace,
+// exactly one JSON object — no prose, code fences, or second value around it.
+func wholeJSONObject(text string) ([]byte, error) {
+	trimmed := bytes.TrimSpace([]byte(text))
+	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return nil, errors.New("the judge's final message is not a single JSON object")
+	}
+	return trimmed, nil
 }
 
 // ParseEvalOutput reads the final answer and usage from the terminal result
@@ -344,7 +414,7 @@ func (c *Claude) ReportsUsage() bool { return true }
 // success-shaped result (exit 0, the limit banner as the result text, zero
 // output tokens), so without the carve-out rate-limited runs would be silently
 // graded into all-fail rows.
-func (c *Claude) RuntimeError(stdout []byte, exitCode int, timedOut bool) string {
+func (c *Claude) RuntimeError(stdout []byte, exitCode int, _ bool) string {
 	if len(bytes.TrimSpace(stdout)) == 0 {
 		return "empty CLI output"
 	}
@@ -417,15 +487,13 @@ func (c *Claude) ListOfferedModels(ctx context.Context, probe ProbeExec) ([]stri
 	names := make([]string, len(aliases))
 	var wg sync.WaitGroup
 	for i, alias := range aliases {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			out, err := probe(ctx, claudeProbeSpec(alias), nil)
 			if err != nil {
 				return
 			}
 			names[i] = parseClaudeCurrentModel(out)
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -442,9 +510,12 @@ func (c *Claude) ListOfferedModels(ctx context.Context, probe ProbeExec) ([]stri
 
 // claudeProbeSpec builds the client-side "/model" probe invocation, optionally
 // pinning an alias to resolve. DISABLE_AUTOUPDATER keeps the probe from
-// kicking off an update check; everything else uses the operator's config.
+// kicking off an update check; it otherwise uses the operator's config.
+// --setting-sources user and --strict-mcp-config keep any project settings
+// (hooks) and MCP servers of the directory it runs in from loading, so a
+// hostile repository cannot execute code through the probe.
 func claudeProbeSpec(alias string) model.CommandSpec {
-	argv := []string{"claude", "-p", "/model"}
+	argv := []string{"claude", "-p", "/model", "--setting-sources", "user", "--strict-mcp-config"}
 	if alias != "" {
 		argv = append(argv, "--model", alias)
 	}

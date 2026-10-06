@@ -15,13 +15,13 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"github.com/bitwise-media-group/evolve/internal/cli"
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/run"
-	"github.com/bitwise-media-group/evolve/internal/runner"
-	"github.com/bitwise-media-group/evolve/internal/telemetry"
-	"github.com/bitwise-media-group/evolve/internal/tui"
+	"github.com/codeactual/evolve/internal/cli"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/telemetry"
+	"github.com/codeactual/evolve/internal/tui"
 )
 
 // offeredModelsProbeTimeout bounds the pre-form offered-models probes. All
@@ -149,7 +149,8 @@ func runSub(cmd, sub *cobra.Command, failures *bool) error {
 // refine the initial selection. withChecksReport adds `run all`'s static-checks step
 // before and report step after.
 func uiRun(cmd *cobra.Command, sweep *SweepFlags, def plan.Tiers,
-	triggerRuns int, evalFilter, failMsg string, withChecksReport bool) error {
+	triggerRuns int, evalFilter, failMsg string, withChecksReport bool,
+) error {
 	var failures bool
 	if withChecksReport {
 		if err := runSub(cmd, checksCmd, &failures); err != nil {
@@ -213,7 +214,7 @@ func uiRun(cmd *cobra.Command, sweep *SweepFlags, def plan.Tiers,
 	offered := map[string][]string{}
 	if len(sweep.Models) == 0 {
 		probeCtx, cancelProbe := context.WithTimeout(cmd.Context(), offeredModelsProbeTimeout)
-		offered = run.ProbeOfferedModels(probeCtx, &runner.Exec{}, harnesses, offeredModelsProbeTimeout)
+		offered = run.ProbeOfferedModels(probeCtx, &runner.Exec{InheritEnv: true}, harnesses, offeredModelsProbeTimeout)
 		cancelProbe()
 	}
 	var hstates []plan.HarnessState

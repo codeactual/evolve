@@ -4,8 +4,8 @@
 package plan
 
 import (
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // SkillCatalog is one skill's metadata and authored test cases — the data both

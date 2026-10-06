@@ -14,14 +14,14 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/report"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/schemas"
+	"github.com/codeactual/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/report"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/schemas"
 )
 
-const idBase = "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/"
+const idBase = "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/"
 
 // compile builds every embedded schema, registered under its published $id
 // so cross-file refs resolve offline. Compiling them all is itself the
@@ -173,9 +173,9 @@ func maximalResults() *results.File {
 			Evidence: "found X", Source: "expectation",
 		},
 	}
-	f.SetEval("cursor/composer-2.5", &results.EvalEntry{
+	f.SetEval("openai/gpt-5.3-codex-spark", &results.EvalEntry{
 		Header: results.Header{
-			Provider: "cursor", Model: "composer-2.5", Display: "Cursor",
+			Provider: "openai", Model: "gpt-5.3-codex-spark", Display: "GPT-5.3 Codex Spark",
 			ToolVersion: "test", RanAt: "2026-06-12T11:00:00Z", Executed: true,
 			TimeoutSeconds: 600, Pricing: nil, // explicit null in the file
 		},
@@ -211,8 +211,10 @@ func maximalResults() *results.File {
 				AvgRunSeconds: new(40.0),
 			},
 			Results: []results.EvalResult{
-				{ID: "1", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
-					Timing: &results.Timing{ExecutorDurationSeconds: new(40.0)}, Fingerprint: "fp-1"},
+				{
+					ID: "1", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
+					Timing: &results.Timing{ExecutorDurationSeconds: new(40.0)}, Fingerprint: "fp-1",
+				},
 			},
 		},
 		Previous: &results.EvalSnapshot{
@@ -223,9 +225,11 @@ func maximalResults() *results.File {
 				Measured:      &results.Measured{InputTokens: new(90), OutputTokens: new(8), CostUSD: new(0.0002)},
 			},
 			Results: []results.EvalResult{
-				{ID: "1", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
+				{
+					ID: "1", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
 					Timing:   &results.Timing{ExecutorDurationSeconds: new(170.0)},
-					Measured: &results.Measured{InputTokens: new(90), OutputTokens: new(8), CostUSD: new(0.0002)}},
+					Measured: &results.Measured{InputTokens: new(90), OutputTokens: new(8), CostUSD: new(0.0002)},
+				},
 			},
 		},
 	})

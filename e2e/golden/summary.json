@@ -24,22 +24,22 @@
             "cost_usd": 0.0007
           }
         },
-        "cursor/composer-2.5": {
-          "provider": "cursor",
-          "display": "Cursor Composer 2.5",
+        "fake/no-usage": {
+          "provider": "fake",
+          "display": "Fake No-Usage",
           "passed": 2,
           "failed": 0,
           "total": 2,
           "pass_rate": 1,
           "avg_run_seconds": 12.7
         },
-        "google/gemini-3.5-flash": {
-          "provider": "google",
-          "display": "Gemini 3.5 Flash",
+        "openai/gpt-5.4": {
+          "provider": "openai",
+          "display": "GPT-5.4",
           "total": 2,
           "estimate": {
             "input_tokens": 2580,
-            "input_cost_usd": 0.00387
+            "input_cost_usd": 0.00645
           }
         }
       },
@@ -105,22 +105,22 @@
                 "cost_usd": 0.0007
               }
             },
-            "cursor/composer-2.5": {
-              "provider": "cursor",
-              "display": "Cursor Composer 2.5",
+            "fake/no-usage": {
+              "provider": "fake",
+              "display": "Fake No-Usage",
               "passed": 2,
               "failed": 0,
               "total": 2,
               "pass_rate": 1,
               "avg_run_seconds": 12.7
             },
-            "google/gemini-3.5-flash": {
-              "provider": "google",
-              "display": "Gemini 3.5 Flash",
+            "openai/gpt-5.4": {
+              "provider": "openai",
+              "display": "GPT-5.4",
               "total": 2,
               "estimate": {
                 "input_tokens": 2580,
-                "input_cost_usd": 0.00387
+                "input_cost_usd": 0.00645
               }
             }
           },

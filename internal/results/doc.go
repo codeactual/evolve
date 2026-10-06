@@ -6,8 +6,8 @@
 // results_format).
 //
 // One file per skill holds both the triggers and evals sections, keyed by
-// "provider/model-id" (provider-qualified because Cursor runs other vendors'
-// models, so bare ids could collide). The per-eval result is a superset of
+// "provider/model-id" (provider-qualified because one harness can run other
+// vendors' models, so bare ids could collide). The per-eval result is a superset of
 // skill-creator's grading.json: an expectations array whose entries carry
 // text/passed/evidence (plus the authored assertion echoed alongside), a
 // summary with grading.json's field names, and a timing block — so tooling

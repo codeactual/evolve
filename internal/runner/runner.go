@@ -23,11 +23,11 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // scopeName is this package's OpenTelemetry instrumentation scope.
-const scopeName = "github.com/bitwise-media-group/evolve/internal/runner"
+const scopeName = "github.com/codeactual/evolve/internal/runner"
 
 // obs lazily builds the tracer and instruments on first Run, after telemetry
 // has installed the global providers; before then otel's globals are no-ops, so
@@ -56,7 +56,8 @@ func newObservability() *observability {
 // marks the span errored only on runErr (a started-but-cancelled or unstartable
 // run). A timeout or non-zero exit is a normal outcome here, not a span error.
 func (o *observability) observe(ctx context.Context, span trace.Span, spec model.CommandSpec,
-	res Result, runErr error) {
+	res Result, runErr error,
+) {
 	span.SetAttributes(
 		attribute.Int("exit_code", res.ExitCode),
 		attribute.Bool("timed_out", res.TimedOut),
@@ -84,15 +85,11 @@ const (
 	stderrTailBytes = 4096
 	maxStdoutBytes  = 32 << 20 // collect mode cap; the stream keeps draining past it
 	waitDelay       = 5 * time.Second
-	// sideHitPoll is how often SideHit is checked while waiting for stdout.
-	// Short enough that a PreToolUse hook marker cancels within a fraction of a
-	// second; long enough to avoid a busy loop.
-	sideHitPoll = 50 * time.Millisecond
 )
 
 // Result is the outcome of one agent run.
 type Result struct {
-	Hit        bool          // scan mode: OnLine or SideHit reported a hit
+	Hit        bool          // scan mode: OnLine reported a hit
 	Stdout     []byte        // collect mode: full stdout (bounded)
 	TimedOut   bool          // the per-run timeout expired
 	ExitCode   int           // process exit code (-1 when killed)
@@ -101,17 +98,15 @@ type Result struct {
 }
 
 // Scan configures scan-mode early-exit for trigger runs. A nil *Scan collects
-// stdout (eval mode). OnLine inspects each stdout line; SideHit is polled on a
-// short interval for out-of-band signals (e.g. a Grok PreToolUse hit file).
-// Either returning true ends the run early with Hit=true.
+// stdout (eval mode). OnLine inspects each stdout line; returning true ends the
+// run early with Hit=true.
 type Scan struct {
-	OnLine  func([]byte) bool
-	SideHit func() bool
+	OnLine func([]byte) bool
 }
 
 // scanning reports whether this Scan is in scan mode (vs collect).
 func (s *Scan) scanning() bool {
-	return s != nil && (s.OnLine != nil || s.SideHit != nil)
+	return s != nil && s.OnLine != nil
 }
 
 // Exec runs commands for real.
@@ -120,17 +115,25 @@ type Exec struct {
 	// the command in an OS sandbox. The zero value is disabled, so callers and
 	// tests that build Exec{} run unconfined as before.
 	Sandbox Sandbox
+	// InheritEnv passes the operator's whole environment to the command instead
+	// of the allowlist (see buildEnv). Only the operator-context probes set it:
+	// they read the operator's real CLI configuration and run no untrusted input.
+	InheritEnv bool
+	// EnvPassthrough names additional parent environment variables to pass
+	// through (the operator's sandbox.env_passthrough).
+	EnvPassthrough []string
 }
 
 // Run executes spec with the given timeout. A nil scan collects stdout into
-// Result.Stdout. A non-nil scan inspects stdout (OnLine) and/or a side channel
-// (SideHit); the first true ends the run early with Hit=true. A timed-out run
+// Result.Stdout. A non-nil scan inspects stdout (OnLine); the first true ends
+// the run early with Hit=true. A timed-out run
 // is not an error: it returns TimedOut=true with whatever output arrived, so
 // trigger runs count as no-trigger and case runs grade partial output. The
 // returned error is non-nil only for unstartable commands or parent-context
 // cancellation (Ctrl-C).
 func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Duration,
-	scan *Scan) (Result, error) {
+	scan *Scan,
+) (Result, error) {
 	o := obs()
 	ctx, span := o.tracer.Start(ctx, "evolve.agent.exec")
 	defer span.End()
@@ -138,7 +141,7 @@ func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Dur
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	argv, err := e.Sandbox.wrap(spec.Dir, spec.Argv)
+	argv, err := e.Sandbox.wrap(spec)
 	if err != nil {
 		return Result{}, startError(span, err)
 	}
@@ -150,7 +153,7 @@ func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Dur
 
 	cmd := exec.CommandContext(runCtx, argv[0], argv[1:]...)
 	cmd.Dir = spec.Dir
-	cmd.Env = append(os.Environ(), spec.Env...)
+	cmd.Env = buildEnv(os.Environ(), spec.Env, e.InheritEnv, e.EnvPassthrough, e.Sandbox.Enabled)
 	if spec.Stdin != nil {
 		cmd.Stdin = bytes.NewReader(spec.Stdin)
 	}
@@ -222,9 +225,8 @@ func (e *Exec) Run(ctx context.Context, spec model.CommandSpec, timeout time.Dur
 }
 
 // scanStdout reads agent stdout in scan mode until EOF, a hit, or context
-// cancel. OnLine sees each line; SideHit is polled so out-of-band markers can
-// kill the process even when the stream is quiet. After a hit, remaining
-// stdout is drained so Wait can return.
+// cancel. OnLine sees each line. After a hit, remaining stdout is drained so
+// Wait can return.
 func scanStdout(runCtx context.Context, cancel context.CancelFunc, stdout io.Reader, scan *Scan) bool {
 	type readEv struct {
 		line []byte
@@ -243,14 +245,6 @@ func scanStdout(runCtx context.Context, cancel context.CancelFunc, stdout io.Rea
 		}
 	}()
 
-	var ticker *time.Ticker
-	var tick <-chan time.Time
-	if scan.SideHit != nil {
-		ticker = time.NewTicker(sideHitPoll)
-		defer ticker.Stop()
-		tick = ticker.C
-	}
-
 	hit := false
 	for {
 		select {
@@ -263,11 +257,6 @@ func scanStdout(runCtx context.Context, cancel context.CancelFunc, stdout io.Rea
 				return hit
 			}
 			// After hit, keep draining until err.
-		case <-tick:
-			if !hit && scan.SideHit != nil && scan.SideHit() {
-				hit = true
-				cancel()
-			}
 		case <-runCtx.Done():
 			// Timeout or early-hit cancel: drain until the pipe closes so Wait
 			// is not blocked on a full buffer. Ignore further hits.

@@ -5,15 +5,14 @@ package tui
 
 import (
 	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 // status is the lifecycle state of one execution unit or case.
@@ -247,7 +246,8 @@ type dashboardModel struct {
 // from what the engine runs). cat supplies the authored specs the Details pane
 // shows; prior seeds the delta basis.
 func newDashboard(p plan.Plan, cat []plan.SkillCatalog, prior plan.PriorMetrics,
-	thresholds Thresholds) dashboardModel {
+	thresholds Thresholds,
+) dashboardModel {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 
@@ -1056,22 +1056,12 @@ func (d dashboardModel) detailPageStep() int {
 	return max((detailsH-2)/2, 1)
 }
 
-// openPath launches the OS file handler on path (a retained workspace dir or an
-// output log) as a detached, best-effort side effect. A blank path is a no-op,
-// so it is safe to call before the engine has surfaced these paths.
+// openPath launches xdg-open on path (a retained workspace dir or an output
+// log) as a detached, best-effort side effect. A blank path is a no-op, so it
+// is safe to call before the engine has surfaced these paths.
 func openPath(path string) {
 	if path == "" {
 		return
 	}
-	var name string
-	var args []string
-	switch runtime.GOOS {
-	case "darwin":
-		name, args = "open", []string{path}
-	case "windows":
-		name, args = "cmd", []string{"/c", "start", "", path}
-	default:
-		name, args = "xdg-open", []string{path}
-	}
-	_ = exec.Command(name, args...).Start()
+	_ = exec.Command("xdg-open", path).Start()
 }

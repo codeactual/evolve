@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/evalspec"
 )
 
 // ErrSchemaTooNew reports a results or report file written by a newer evolve:
@@ -70,7 +70,7 @@ type Header struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
 	Display  string `json:"display"`
-	// Harness names the agent CLI that executed this entry (claude, copilot, …).
+	// Harness names the agent CLI that executed this entry (claude, codex, …).
 	// Additive: empty on entries written before the harness split, when the
 	// provider implied its driver.
 	Harness     string `json:"harness,omitempty"`

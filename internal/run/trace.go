@@ -11,14 +11,14 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // scopeName is this package's OpenTelemetry instrumentation scope. The engine
 // reaches the global tracer through it rather than importing internal/telemetry,
 // so telemetry can import internal/run for its reporter decorator without a
 // cycle.
-const scopeName = "github.com/bitwise-media-group/evolve/internal/run"
+const scopeName = "github.com/codeactual/evolve/internal/run"
 
 func tracer() trace.Tracer { return otel.Tracer(scopeName) }
 
@@ -52,8 +52,8 @@ func unitSpanAttrs(ref plan.UnitRef) []attribute.KeyValue {
 
 // splitUnitKey splits a "provider/model" unit key into its parts.
 func splitUnitKey(key string) (provider, model string) {
-	if i := strings.IndexByte(key, '/'); i >= 0 {
-		return key[:i], key[i+1:]
+	if before, after, ok := strings.Cut(key, "/"); ok {
+		return before, after
 	}
 	return key, ""
 }

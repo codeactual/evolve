@@ -25,7 +25,8 @@ import (
 // workspace; pass keep=true to leave it behind for debugging (or so a
 // run-scoped parent owns its removal).
 func New(parent, prefix string, skills []string, dirs []string, copies map[string]string,
-	keep bool) (string, func(), error) {
+	keep bool,
+) (string, func(), error) {
 	ws, err := os.MkdirTemp(parent, prefix)
 	if err != nil {
 		return "", nil, err
@@ -84,18 +85,20 @@ func New(parent, prefix string, skills []string, dirs []string, copies map[strin
 // diff against HEAD. Git runs insulated from operator and system configuration
 // — no signing, ignores, or identity leaks in — so workspace creation behaves
 // the same on any machine, including CI with no git identity at all. This is a
-// setup-time exec like the claude harness's Keychain bridge; agent execution
-// still goes through internal/runner only.
+// setup-time exec; agent execution still goes through internal/runner only.
 func initRepo(ws string) error {
-	env := append(os.Environ(),
+	env := append(
+		os.Environ(),
 		"GIT_CONFIG_GLOBAL="+os.DevNull,
 		"GIT_CONFIG_SYSTEM="+os.DevNull,
 	)
 	for _, args := range [][]string{
 		{"-c", "init.defaultBranch=main", "init", "-q"},
 		{"-c", "core.excludesFile=" + os.DevNull, "add", "-A"},
-		{"-c", "user.name=evolve", "-c", "user.email=evolve@workspace.invalid",
-			"commit", "-q", "--allow-empty", "-m", "initial workspace state"},
+		{
+			"-c", "user.name=evolve", "-c", "user.email=evolve@workspace.invalid",
+			"commit", "-q", "--allow-empty", "-m", "initial workspace state",
+		},
 	} {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = ws

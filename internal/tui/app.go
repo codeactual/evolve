@@ -12,7 +12,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 type screen int
@@ -42,7 +42,8 @@ type Model struct {
 // the dashboard classifies rollups against. The chosen RunRequest is sent on
 // runReq when the user runs; the channel is closed by the caller if they cancel.
 func New(session *plan.Session, cat []plan.SkillCatalog, evalFilter string,
-	prior plan.PriorMetrics, thresholds Thresholds, runReq chan<- RunRequest) Model {
+	prior plan.PriorMetrics, thresholds Thresholds, runReq chan<- RunRequest,
+) Model {
 	return Model{
 		screen:     screenForm,
 		form:       newForm(session, cat, evalFilter),
@@ -53,6 +54,7 @@ func New(session *plan.Session, cat []plan.SkillCatalog, evalFilter string,
 	}
 }
 
+// Init implements tea.Model; the program starts with no command.
 func (m Model) Init() tea.Cmd { return nil }
 
 // repaint chains a full-screen redraw onto an update's own commands. It works
@@ -71,6 +73,8 @@ func repaint(cmds ...tea.Cmd) tea.Cmd {
 	return tea.Batch(append(cmds, tea.ClearScreen)...)
 }
 
+// Update implements tea.Model: it routes each message to the form or the
+// dashboard for the current phase.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -147,6 +151,8 @@ func (m Model) startRun() (tea.Model, tea.Cmd) {
 	)
 }
 
+// View implements tea.Model: it renders the form or the dashboard for the
+// current phase.
 func (m Model) View() tea.View {
 	content := m.dash.view()
 	if m.screen == screenForm {

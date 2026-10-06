@@ -9,10 +9,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 // TestCaseMetricCellsGatedOnCompletion proves the execution pane resolves a delta
@@ -228,14 +228,18 @@ func TestCompletedGroupSettlesWithoutSpinner(t *testing.T) {
 	d.apply(unitStartedMsg{ref: tr, total: 2, mode: plan.ModeRun})
 	for _, q := range []string{"q1", "q2"} {
 		d.apply(itemStartedMsg{ref: tr, item: run.ItemStart{Label: q}})
-		d.apply(itemDoneMsg{ref: tr, item: run.ItemResult{Label: q, Status: plan.StatusPass,
-			Metrics: plan.ItemMetrics{Hits: new(1), Runs: new(1)}}})
+		d.apply(itemDoneMsg{ref: tr, item: run.ItemResult{
+			Label: q, Status: plan.StatusPass,
+			Metrics: plan.ItemMetrics{Hits: new(1), Runs: new(1)},
+		}})
 	}
 	d.apply(unitStartedMsg{ref: ev, total: 2, mode: plan.ModeRun})
 	for _, e := range []string{"e1", "e2"} {
 		d.apply(itemStartedMsg{ref: ev, item: run.ItemStart{Label: e}})
-		d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{Label: e, Status: plan.StatusPass,
-			Metrics: plan.ItemMetrics{AssertPassed: new(1), AssertTotal: new(1)}}})
+		d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{
+			Label: e, Status: plan.StatusPass,
+			Metrics: plan.ItemMetrics{AssertPassed: new(1), AssertTotal: new(1)},
+		}})
 	}
 
 	units := soloModelUnits(d)
@@ -387,15 +391,19 @@ func TestExecutionBrowseMode(t *testing.T) {
 	d.apply(unitStartedMsg{ref: tr, total: 2, mode: plan.ModeRun})
 	for _, q := range []string{"q1", "q2"} {
 		d.apply(itemStartedMsg{ref: tr, item: run.ItemStart{Label: q}})
-		d.apply(itemDoneMsg{ref: tr, item: run.ItemResult{Label: q, Status: plan.StatusPass,
-			Metrics: plan.ItemMetrics{Hits: new(1), Runs: new(1)}}})
+		d.apply(itemDoneMsg{ref: tr, item: run.ItemResult{
+			Label: q, Status: plan.StatusPass,
+			Metrics: plan.ItemMetrics{Hits: new(1), Runs: new(1)},
+		}})
 	}
 	d.apply(unitFinishedMsg{ref: tr, sum: run.UnitSummary{Executed: true, Passed: 2, Total: 2}})
 	d.apply(unitStartedMsg{ref: ev, total: 2, mode: plan.ModeRun})
 	d.apply(itemStartedMsg{ref: ev, item: run.ItemStart{Label: "e1"}})
-	d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{Label: "e1", Status: plan.StatusPass,
+	d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{
+		Label: "e1", Status: plan.StatusPass,
 		Output: "ANSWER", Detail: "  [PASS] e1\n",
-		Metrics: plan.ItemMetrics{AvgRunSeconds: new(2.0), AssertPassed: new(1), AssertTotal: new(1)}}})
+		Metrics: plan.ItemMetrics{AvgRunSeconds: new(2.0), AssertPassed: new(1), AssertTotal: new(1)},
+	}})
 	d.apply(itemStartedMsg{ref: ev, item: run.ItemStart{Label: "e2"}})
 
 	// Focus the Execution pane → browse mode, seeded from the live path so the

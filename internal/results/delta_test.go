@@ -6,10 +6,14 @@ package results
 import "testing"
 
 func TestEvalSummaryDelta(t *testing.T) {
-	cur := EvalSummary{PassRate: new(0.8), AvgRunSeconds: new(20.0),
-		Measured: &Measured{InputTokens: new(120), OutputTokens: new(30), CostUSD: new(0.5)}}
-	prior := EvalSummary{PassRate: new(0.5), AvgRunSeconds: new(25.0),
-		Measured: &Measured{InputTokens: new(100), OutputTokens: new(40), CostUSD: new(0.6)}}
+	cur := EvalSummary{
+		PassRate: new(0.8), AvgRunSeconds: new(20.0),
+		Measured: &Measured{InputTokens: new(120), OutputTokens: new(30), CostUSD: new(0.5)},
+	}
+	prior := EvalSummary{
+		PassRate: new(0.5), AvgRunSeconds: new(25.0),
+		Measured: &Measured{InputTokens: new(100), OutputTokens: new(40), CostUSD: new(0.6)},
+	}
 
 	d := EvalSummaryDelta(cur, prior)
 	if d.Rate == nil || *d.Rate != 0.3 {
@@ -70,9 +74,11 @@ func TestSnapshotEval(t *testing.T) {
 	e := &EvalEntry{
 		Header: Header{Executed: true, RanAt: "2026-06-11T00:00:00Z"},
 		Results: []EvalResult{
-			{ID: "a", Passed: new(true), Summary: &GradeSummary{PassRate: new(1.0)},
+			{
+				ID: "a", Passed: new(true), Summary: &GradeSummary{PassRate: new(1.0)},
 				Timing:       &Timing{ExecutorDurationSeconds: new(12.0)},
-				Expectations: []GradedAssertion{{Text: "x", Passed: new(true)}}},
+				Expectations: []GradedAssertion{{Text: "x", Passed: new(true)}},
+			},
 			{ID: "b", RuntimeError: "boom"},
 		},
 		Summary: EvalSummary{Passed: new(1), Total: 2},

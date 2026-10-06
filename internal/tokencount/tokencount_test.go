@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // fakeCounter is a model.TokenCounter whose behavior the test controls.

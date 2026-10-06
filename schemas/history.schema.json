@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/history.schema.json",
+  "$id": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/history.schema.json",
   "title": "history.json (skill-creator superset)",
   "description": "Version progression for an improvement loop, compatible with skill-creator's history.json. Evolve extras are additive and optional; an evolve improve mode emits against this contract.",
   "type": "object",

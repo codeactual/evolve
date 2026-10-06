@@ -10,8 +10,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 // The left "Execution" pane: the plugin -> skill -> model -> case tree, its

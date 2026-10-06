@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/internal/tokencount"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/tokencount"
 )
 
 // recReporter records the order units start in, so a test can assert the sweep's

@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,37 @@ func newTestCmd() *cobra.Command {
 	cmd.Flags().String("layout", "auto", "")
 	cmd.Flags().String("results-format", "", "")
 	return cmd
+}
+
+// TestMain points the user-level config directory at an empty temp dir for the
+// whole package, so a developer's real ~/.config/evolve can never leak into a
+// test. Individual tests override XDG_CONFIG_HOME with t.Setenv.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "evolve-cli-test-xdg-")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("XDG_CONFIG_HOME", dir); err != nil {
+		panic(err)
+	}
+	code := m.Run()
+	if err := os.RemoveAll(dir); err != nil {
+		fmt.Fprintln(os.Stderr, "cleanup:", err)
+	}
+	os.Exit(code)
+}
+
+// userConfigDir points XDG_CONFIG_HOME at a fresh temp dir and returns the
+// evolve directory inside it, where the user-level config file lives.
+func userConfigDir(t *testing.T) string {
+	t.Helper()
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	dir := filepath.Join(xdg, "evolve")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
 }
 
 func writeFile(t *testing.T, dir, name, content string) {
@@ -164,5 +196,142 @@ func TestLoadConfigInvalidJSONC(t *testing.T) {
 	o := &Options{Viper: viper.New(), Root: dir, Layout: "auto"}
 	if err := o.LoadConfig(newTestCmd()); err == nil {
 		t.Fatal("LoadConfig: want error for invalid jsonc")
+	}
+}
+
+// loadWithRepoConfig loads a repository .evolve.yaml with the given body and
+// returns LoadConfig's error.
+func loadWithRepoConfig(t *testing.T, body string) error {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile(t, dir, ".evolve.yaml", body)
+	o := &Options{Viper: viper.New(), Root: dir, Layout: "auto"}
+	return o.LoadConfig(newTestCmd())
+}
+
+func TestLoadConfigRejectsOperatorOnlyKeyInRepoConfig(t *testing.T) {
+	xdg := userConfigDir(t)
+	cases := []struct {
+		name string
+		body string
+		want []string // substrings the error must carry
+	}{
+		{
+			"sandbox.enabled", "sandbox:\n  enabled: false\n",
+			[]string{"sandbox.enabled", "EVOLVE_SANDBOX_ENABLED", "--no-sandbox"},
+		},
+		{
+			"sandbox.read_paths", "sandbox:\n  read_paths: [/etc/ssl]\n",
+			[]string{"sandbox.read_paths", "EVOLVE_SANDBOX_READ_PATHS"},
+		},
+		{
+			"cache_dir", "cache_dir: /tmp/somewhere\n",
+			[]string{"cache_dir", "EVOLVE_CACHE_DIR"},
+		},
+		{
+			"telemetry.dir", "telemetry:\n  dir: /tmp/otel\n",
+			[]string{"telemetry.dir", "EVOLVE_TELEMETRY_DIR", "--telemetry-dir"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := loadWithRepoConfig(t, tc.body)
+			if err == nil {
+				t.Fatal("LoadConfig: want an error for an operator-only key in a repository config")
+			}
+			for _, want := range append(tc.want, filepath.Join(xdg, "config.")) {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q lacks %q", err, want)
+				}
+			}
+		})
+	}
+}
+
+func TestLoadConfigRejectsRemovedKey(t *testing.T) {
+	xdg := userConfigDir(t)
+	writeFile(t, xdg, "config.yaml", "sandbox:\n  protected_roots: [/home/u/Repos]\n")
+	o := &Options{Viper: viper.New(), Root: t.TempDir(), Layout: "auto"}
+	err := o.LoadConfig(newTestCmd())
+	if err == nil {
+		t.Fatal("LoadConfig: want an error for the removed sandbox.protected_roots key")
+	}
+	for _, want := range []string{"sandbox.protected_roots", "sandbox.read_paths", "sandbox.write_paths"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q lacks %q", err, want)
+		}
+	}
+}
+
+func TestLoadConfigHonorsUserLevelOperatorKeys(t *testing.T) {
+	xdg := userConfigDir(t)
+	writeFile(t, xdg, "config.yaml", "sandbox:\n  enabled: false\ncache_dir: /var/cache/evolve\n")
+	o := &Options{Viper: viper.New(), Root: t.TempDir(), Layout: "auto"}
+	if err := o.LoadConfig(newTestCmd()); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if o.Viper.GetBool("sandbox.enabled") || !o.Viper.IsSet("sandbox.enabled") {
+		t.Error("sandbox.enabled=false in the user-level config was not honored")
+	}
+	if got := o.Viper.GetString("cache_dir"); got != "/var/cache/evolve" {
+		t.Errorf("cache_dir = %q, want the user-level value", got)
+	}
+}
+
+func TestLoadConfigRepoOverridesUserLevel(t *testing.T) {
+	xdg := userConfigDir(t)
+	writeFile(t, xdg, "config.yaml", "max_turns: 7\nlayout: multi\njudge_model: user-judge\n")
+	dir := t.TempDir()
+	writeFile(t, dir, ".evolve.yaml", "max_turns: 9\nlayout: marketplace\n")
+
+	o := &Options{Viper: viper.New(), Root: dir, Layout: "auto"}
+	if err := o.LoadConfig(newTestCmd()); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if got := o.Viper.GetInt("max_turns"); got != 9 {
+		t.Errorf("max_turns = %d, want the repository's 9 over the user-level 7", got)
+	}
+	if got := o.Viper.GetString("judge_model"); got != "user-judge" {
+		t.Errorf("judge_model = %q, want the user-level value (repository leaves it unset)", got)
+	}
+	if o.Layout != "marketplace" {
+		t.Errorf("Layout = %q, want marketplace (repository over user-level)", o.Layout)
+	}
+
+	// An explicit flag beats both files.
+	cmd := newTestCmd()
+	if err := cmd.Flags().Set("layout", "single"); err != nil {
+		t.Fatal(err)
+	}
+	o = &Options{Viper: viper.New(), Root: dir, Layout: "single"}
+	if err := o.LoadConfig(cmd); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if o.Layout != "single" {
+		t.Errorf("Layout = %q, want single (explicit flag)", o.Layout)
+	}
+}
+
+func TestLoadConfigUserLevelAmbiguous(t *testing.T) {
+	xdg := userConfigDir(t)
+	writeFile(t, xdg, "config.yaml", "layout: multi\n")
+	writeFile(t, xdg, "config.json", `{"layout": "single"}`)
+	o := &Options{Viper: viper.New(), Root: t.TempDir(), Layout: "auto"}
+	err := o.LoadConfig(newTestCmd())
+	if err == nil || !strings.Contains(err.Error(), "ambiguous config") {
+		t.Fatalf("LoadConfig error = %v, want ambiguous config", err)
+	}
+}
+
+func TestLoadConfigEnvBeatsConfigFiles(t *testing.T) {
+	xdg := userConfigDir(t)
+	writeFile(t, xdg, "config.yaml", "sandbox:\n  enabled: false\n")
+	t.Setenv("EVOLVE_SANDBOX_ENABLED", "true")
+	o := &Options{Viper: viper.New(), Root: t.TempDir(), Layout: "auto"}
+	if err := o.LoadConfig(newTestCmd()); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !o.Viper.GetBool("sandbox.enabled") {
+		t.Error("EVOLVE_SANDBOX_ENABLED should beat the user-level config file")
 	}
 }

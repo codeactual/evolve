@@ -6,8 +6,8 @@ package tui
 import (
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 func TestColorDirections(t *testing.T) {
@@ -46,8 +46,10 @@ func TestEvalResultOf(t *testing.T) {
 func TestCaseDeltaBasisFallback(t *testing.T) {
 	ev := plan.UnitRef{Skill: "s", Key: "fake/m1", Kind: plan.KindEvals}
 	d := dashboardModel{prior: plan.PriorMetrics{}, liveBaseline: map[caseKey]results.EvalResult{}}
-	c := &caseState{kind: plan.KindEvals, label: "e1", status: stPass,
-		metrics: plan.ItemMetrics{AssertPassed: new(1), AssertTotal: new(1)}}
+	c := &caseState{
+		kind: plan.KindEvals, label: "e1", status: stPass,
+		metrics: plan.ItemMetrics{AssertPassed: new(1), AssertTotal: new(1)},
+	}
 
 	// No prior of any kind: no basis, no delta.
 	if _, basis := d.caseDelta(ev, c); basis != basisNone {

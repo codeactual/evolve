@@ -13,7 +13,7 @@ func discoverItems() []DiscoverItem {
 		{ProviderID: "anthropic", ProviderName: "Anthropic", ID: "claude-sonnet-5", Name: "Claude Sonnet 5"},
 		{ProviderID: "anthropic", ProviderName: "Anthropic", ID: "claude-opus-4-8", Name: "Claude Opus 4.8", Source: "builtin"},
 		{ProviderID: "openai", ProviderName: "OpenAI", ID: "gpt-5.5", Name: ""},
-		{ProviderID: "google", ProviderName: "Google", ID: "gemini-3.5-flash", Name: "Gemini 3.5 Flash"},
+		{ProviderID: "openai", ProviderName: "OpenAI", ID: "codex-mini-latest", Name: "Codex Mini"},
 	}
 }
 

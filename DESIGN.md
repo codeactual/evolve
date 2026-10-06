@@ -17,8 +17,10 @@ evolve run checks|triggers|evals|all
 tiers still produce signal.
 
 Global flags (`--root`, `--layout`, `--json`, `-v`) apply to every command. Configuration layers, lowest precedence
-first: built-in defaults, the optional `.evolve.<ext>` config file at the repository root (YAML, JSON, JSONC, or TOML —
-at most one), `EVOLVE_*` environment variables, then explicit flags.
+first: built-in defaults, the optional user-level config file (`os.UserConfigDir()/evolve/config.<ext>`), the optional
+`.evolve.<ext>` config file at the repository root (YAML, JSON or JSONC — at most one of each), `EVOLVE_*` environment
+variables, then explicit flags. The repository is untrusted, so its config is loaded separately and rejected when it sets
+an operator-only key (`sandbox.*`, `cache_dir`, `telemetry.*`); see the sandbox paragraphs below.
 
 Exit codes are part of the interface: 0 means the run completed, 2 means a usage or configuration error stopped it.
 Failed checks or evals print a `WARN:` line but still exit 0 by default; passing `--strict` to a `run` subcommand
@@ -31,7 +33,6 @@ restores exit 1 on failures (`cli.ErrFailures`). `report --check` always exits 1
 ./cmd/evolve/main.go   # main entry point and root command (package main)
 ./cmd/evolve/<verb>.go # one file per subcommand
 ./cmd/evolve/runui.go  # TUI gating + the form -> engine -> dashboard wiring for `run`
-./cmd/evolve/docs.go   # hidden command that regenerates docs/cli, docs/man, and docs/config
 
 ./internal/cli/...     # shared command plumbing: global Options, config layering,
                        # harness/model/repo/threshold resolution
@@ -40,11 +41,9 @@ restores exit 1 on failures (`cli.ErrFailures`). `report --check` always exits 1
 ./internal/<area>/...  # one package per remaining concern (grade, report, results,
                        # runner, workspace, ...)
 
-./docs/cli/...         # generated command reference (make docs)
-./docs/man/...         # generated man pages (make docs)
-./docs/config/...      # generated configuration reference + annotated examples (make docs)
+./docs/...             # authored Markdown documentation, rendered by GitHub
 ./e2e/...              # separate module: live smoke test plus fixture repositories and golden files
-./make/...             # shared Makefile library submodule (archetype, fragments, dev-CLI pins)
+./Makefile             # self-contained: build, test, ci, the pinned analyzers, live, smoke, security_scan
 ```
 
 If a concern spans areas, it gets its own package under `./internal` with a clear but concise name. Every internal
@@ -60,79 +59,94 @@ tiers). Shared global state lives in the package-level `opts` (`cli.Options`).
 effective harness/model set, a token counter, and report thresholds. The engines (`run`, `report`) take what they need
 as explicit options — the trigger and case engines embed the shared `run.Options` — and write through the interfaces
 they declare, so they test against fakes; `runner` is the only package that touches `os/exec` for agent execution (the
-setup-time exceptions are the claude harness's macOS Keychain bridge, covered under session isolation below, and
-`internal/workspace` shelling out to `git` to initialise each workspace as a repository).
+one setup-time exception is `internal/workspace` shelling out to `git` to initialise each workspace as a repository).
 
-Because `runner` is that single exec chokepoint, it also enforces filesystem isolation: agent CLIs run in full-auto
-(`--dangerously-skip-permissions` and the like), so `cmd.Dir` alone would not stop a run from wandering into other
-checkouts. When `Exec.Sandbox` is enabled (the default), every command is wrapped in an OS sandbox — `sandbox-exec` on
-macOS, `bubblewrap` on Linux — that denies writes under the configured `sandbox.protected_roots` (default: the parent of
-the repo under test) while re-permitting the per-run workspace. It is a denylist, not an allowlist: reads, the network,
-and writes to dependency caches stay open so build tooling (`go mod download`, `npm ci`, `uv sync`, `terraform init`,
-and unknown future tools) keeps working — the sandbox only protects source repositories. It fails closed (an enabled
-sandbox with no available helper errors rather than running unconfined); `--no-sandbox` / `sandbox.enabled=false` opts
-out.
+### Trust model and the sandbox layers
 
-Several agent CLIs sandbox their own shell commands the same way (Claude Code, codex, and Grok all use macOS Seatbelt),
-and Seatbelt cannot nest — a second `sandbox-exec` inside evolve's aborts every shell command with
-`Operation not permitted`, silently degrading a run rather than failing it. So when evolve's sandbox is active the
-harnesses disable the agent's own (`run.Options.HostSandboxed`, threaded into `TriggerSpec`/`EvalSpec`): Claude via
-`--settings` with `{"sandbox":{"enabled":false}}`, codex via `--sandbox danger-full-access`, gemini via
-`GEMINI_SANDBOX=false`, Grok via `--sandbox off`. evolve's outer sandbox is then the sole layer and still covers
-everything (file tools included, not just shell). The fallback is symmetric: with evolve unconfined (`--no-sandbox`) the
-agent keeps its own sandbox as the only protection (Grok uses `--sandbox workspace`). A `managed-settings.json` that
-forces Claude's sandbox on still wins, so those hosts must use `--no-sandbox`.
+The repository under test is untrusted (its skills, fixtures, eval prompts, and its own `.evolve.<ext>`), the agents run
+with permission prompts off, and the operator is trusted. Containment is the control, in layers:
 
-Filesystem confinement covers what a run may write; session isolation covers what it may remember. Every harness also
-points its CLI at a throwaway state directory inside the workspace (`.evolve/<name>-home`) so trigger/eval sessions —
-and the LLM judge's own agent session (one per eval case, run under the eval posture) — never land in the operator's
-real session history, and no long-term memory carries across runs. CLIs with a dedicated config-dir variable get that
-(`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `COPILOT_HOME`, `GROK_HOME`); the rest run under an overridden `$HOME` (gemini and
-agy, which hard-wire their state roots to the home directory, and cursor, which gets `CURSOR_CONFIG_DIR` too but keeps
-its chat store at an undocumented path under `~/.cursor`). Auth is bridged in from the operator's real config root:
-symlinked for auth-only files so a mid-run token refresh writes through (grok's and codex's `auth.json`, claude's
-`.credentials.json`, gemini's `oauth_creds.json`, agy's oauth token), copied `0600` for files that mix credentials with
-mutable config so a run can never write back (cursor's `cli-config.json`, copilot's `config.json`, gemini's
-`settings.json`); Keychain-stored credentials (claude and copilot on macOS) are global to the user and need no bridging.
-HOME-overridden harnesses also get `~/.gitconfig` and the XDG `~/.config/git` tree linked in so git identity keeps
-working. (The `EVOLVE_*`-prefixed credential variables are deliberately not bridged: they scope credentials to the
-token-counting APIs, and the prefix exists precisely so they never override what the harness CLIs authenticate with.)
-Claude on macOS needs one extra bridge: the CLI namespaces its Keychain entry by config dir
-(`Claude Code-credentials-` + the first 8 hex chars of `sha256(dir)`), so an isolated `CLAUDE_CONFIG_DIR` can never see
-the operator's entry — when no credential env var the CLI reads is set, evolve reads the operator's entry back via
-`/usr/bin/security` (the CLI's own storage mechanism) into the isolated `.credentials.json`, which the CLI accepts as
-its fallback store. That `security` call is the one exec outside `internal/runner`; harness specs stay pure, so the
-engines still test against a fake runner. The shared helpers live in `internal/harness/isolate.go` and are best-effort:
-a failure still leaves the env override set, so the CLI builds its own tree and an auth gap surfaces as a runtime error
-on the case rather than an evolve crash. The isolated state dies with the workspace; `--keep-workspaces` preserves it
-for debugging.
+**Operator-only configuration.** `LoadConfig` reads the user-level config and the repository config into separate
+vipers, rejects the repository config when it sets `sandbox.*`, `cache_dir`, or `telemetry.*` (exit 2, naming the key
+and where the operator can set it), and only then merges it over the user-level one. So a hostile repository cannot turn
+the sandbox off, widen it, or choose host paths evolve writes to. Offered-model probes run unsandboxed against the
+operator's real CLI config, so they run from a fresh empty directory, and the Claude probe passes
+`--setting-sources user --strict-mcp-config`.
 
-The CLI reference in `docs/cli` and the man pages in `docs/man` are generated from the cobra command tree, and the
-configuration reference plus annotated example config files in `docs/config` from `internal/configdoc`'s schema (all via
-`make docs`) and committed, so reviewing a flag or config change shows the documentation diff alongside the code.
+**The outer sandbox is deny-by-default.** Because `runner` is the single exec chokepoint, it also enforces filesystem
+isolation: when `Exec.Sandbox` is enabled (the default) every command runs inside bubblewrap with a fresh root that shows
+only the system directories (`/usr`, the merged-`/usr` symlinks or `/bin /sbin /lib…` binds, `/etc`, `/sys`, `/proc`,
+`/dev`, tmpfs `/tmp` and `/var/tmp`), the resolved agent executable, the repository under test read-only, the operator's
+git config files (`~/.gitconfig`, `$XDG_CONFIG_HOME/git/config` falling back to `~/.config/git/config` — never the `git/`
+directory, so `git/credentials` stays hidden) read-only, the spec's `ReadPaths` (the bridged credential files, the
+judge's view of a workspace) read-only, the operator's `sandbox.read_paths`/`sandbox.write_paths` grants, and the run
+directory read-write, bound last so it stays writable even inside a read-only grant. The home directory is not mounted:
+`HOME` stays set and is an ephemeral directory on the sandbox's writable root, and `TMPDIR` is `/tmp`. The network stays
+shared, because agents and dependency tooling need it; `sandbox.read_paths`/`write_paths` are how an operator exposes a
+build cache or toolchain. Grants must be absolute, exist, and may not be `/` or an ancestor of the home directory.
 
-### Remote execution
+The bubblewrap binary runs before the security boundary, so `ResolveBwrap` validates it before every sandboxed run
+(absolute path, regular file, not setuid/setgid, owned by root or the operator, and neither it nor any ancestor
+directory group- or other-writable) and never executes it to check. The sandbox fails closed: an enabled sandbox that
+cannot be constructed errors rather than running the agent unconfined; `--no-sandbox` / `sandbox.enabled=false` opts out.
 
-Runs can execute on a patchy cluster instead of the workstation (`--remote`, or `remote.default` with a configured
-`remote.url`). The split rests on the **bidirectional Reporter seam**: in the pod, `evolve exec-unit` (a hidden verb,
-excluded from the generated docs like `docs`) drives the ordinary engines with `remote.EventReporter` as the
-`run.Reporter`, serializing every progress call onto an `EVOLVE-EVENT:` JSONL stdout stream; on the workstation,
-`remote.ApplyEvent` replays received events onto the local reporter — so remote output is the local output, produced
-through the same interface. Patchy interprets only the terminal `result`/`fatal` events; grading, the LLM judge, and
-results-entry assembly all happen in the pod, co-located with the uploaded workspace bundle, and the finished entry
-travels back opaquely to merge into the local `results.<ext>` with the normal snapshot rotation.
+**The agents' own sandboxes are layered inside.** Both CLIs use bubblewrap on Linux, which nests when user namespaces
+are available, so the harnesses keep their own sandboxes on instead of disabling them (`model.InnerSandbox` threads the
+operator's settings into `TriggerSpec`/`EvalSpec`). Every Claude invocation passes `--settings` with the sandbox enabled,
+`failIfUnavailable`, unsandboxed commands disallowed, and a strict network allowlist (`sandbox.claude_allowed_domains`,
+empty by default); Codex runs `read-only` for triggers and `workspace-write` for evals with
+`sandbox_workspace_write.network_access` from `sandbox.codex_network_access` (off by default), and keeps `.git`
+read-only, so a Codex agent cannot commit. Agent shell commands therefore get no network until the operator opts in.
+Before any agent starts, `evolve run` probes that a bubblewrap can nest inside the outer sandbox (and a further user
+namespace inside that, which Claude's seccomp helper needs) and exits 2 with the probe's stderr if it cannot.
 
-Planning stays local and engine-faithful: `remote.Sweep` enumerates units through `run.Catalog`/`run.Needs` with
-`run.Options.AssumeRunnable` (the local-PATH eligibility gates defer to the server's runner fleet), so `--new`,
-`--failed`, `--modified`, and the filters select exactly what a local run would. Workspaces upload as deterministic
-tarballs (sorted entries, zeroed metadata; results files excluded so digests stay stable), content-addressed and
-deduplicated by sha256.
+On hosts with `kernel.apparmor_restrict_unprivileged_userns=1` AppArmor's profile for `/usr/bin/bwrap` strips the
+capabilities of that bubblewrap's descendants. So the operator points `sandbox.bwrap_path` at an unprofiled copy, and
+evolve exposes the validated binary at `/evolve/bin/bwrap` first on the sandbox's `PATH` (the same file at another path
+is unprofiled), so the CLIs' nested sandboxes use it too. `evolve doctor` reports the provenance verdict, an outer
+smoke run, the nested probe with this remedy, and whether `socat` is present.
 
-Two deliberate exec/storage exceptions ride along: `evolve login` opens the system browser (`open`/`xdg-open`,
-best-effort, URL always printed) for the OIDC authorization-code + PKCE flow — a setup-time exec like the Keychain
-bridge — and the resulting credential is evolve's first **user-level** file
-(`os.UserConfigDir()/evolve/credentials.json`, 0600, keyed by remote URL): durable secrets belong in the config dir, not
-a purgeable cache, and not in any repository.
+**A first-party-only surface.** evolve evaluates skills that are already on the filesystem (it never fetches one), so the
+agents are also kept from reaching outward through their own tools. `harness/local_only.go` owns the flags: Claude gets
+`--strict-mcp-config` and `--disallowedTools` for the in-process tools the sandbox's network allowlist does not govern
+(web fetch and search, remote triggers, push notifications, scheduling, messaging, design sync), plus
+`ENABLE_CLAUDEAI_MCP_SERVERS=false`; Codex gets `--disable` for its connector, plugin, browser, computer-use and
+image-generation features and `web_search="disabled"`. `--setting-sources user` is not used because it also stops the
+workspace's `.claude/skills` loading. The optional `harness.PostureChecker` capability verifies the result before a run:
+`run.CheckPosture` runs the harness's probe through the same runner, sandbox and environment as agent runs — Claude's real
+eval spec cancelled at its init event, Codex's `features list` — and fails on an outward tool, an unreviewed new tool
+(`claudeReviewedTools`), an MCP tool or server, a permission mode other than `bypassPermissions`, or a feature that is
+still enabled or no longer listed. `cmd/evolve` runs it once per harness per process before the sweep and in `doctor`.
+The static half is the Tier 0 `checks.local_only` check.
+
+**An allowlisted environment.** `runner.Run` builds the child environment from a baseline (`PATH`, `HOME`,
+`XDG_CONFIG_HOME`, locale, terminal, proxy and TLS names), the operator's `sandbox.env_passthrough`, and the spec's own
+entries; harnesses forward only the credential variables their CLI reads. `GITHUB_TOKEN`, `AWS_*` and the
+`EVOLVE_*`-prefixed token-counting keys (which scope credentials to the counting APIs and never override what the CLIs
+authenticate with) never reach an agent. Codex runs with `shell_environment_policy.ignore_default_excludes=false` so its
+shell commands drop `*KEY*`/`*SECRET*`/`*TOKEN*`. Claude's analogous `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is not set: in
+claude 2.1.285 it forces the permission mode to default, which would end the prompts-off eval posture. The operator-context
+probes (`Exec.InheritEnv`) keep the full environment because they read the operator's own account configuration.
+
+**Session isolation** covers what a run may remember. Every harness points its CLI at a throwaway state directory inside
+the workspace (`.evolve/<name>-home`) so trigger/eval sessions never land in the operator's real session history, and no
+long-term memory carries across runs: `CLAUDE_CONFIG_DIR` and `CODEX_HOME`. Auth is bridged in from the operator's real
+config root: Claude's `.credentials.json` and Codex's `auth.json` are symlinked into the isolated home and bound
+**read-only** at their real path inside the sandbox through `CommandSpec.ReadPaths`, so an agent cannot write through to
+the operator's real files (a mid-run token refresh cannot persist). The pre-seeded git identity arrives through the
+read-only git config binds, not a private `HOME`. The shared helpers live in `internal/harness/isolate.go` and are
+best-effort: a failure still leaves the env override set, so the CLI builds its own tree and an auth gap surfaces as a
+runtime error on the case rather than an evolve crash. The isolated state dies with the workspace; `--keep-workspaces`
+preserves it for debugging.
+
+**The judge** is the grader, and what it reads is untrusted, so it runs apart from the agent: `HarnessJudge.Judge` creates
+a fresh directory beside the workspace, runs the session there with its own fresh CLI config home and the workspace as a
+read-only path, and removes the directory afterward. Claude runs `--restricted --safe-mode --strict-mcp-config --tools
+Read,Grep,Glob --permission-mode dontAsk --add-dir <ws> --json-schema <schema>`; Codex runs `--sandbox read-only
+--ignore-rules --ephemeral --output-schema`. `grade` owns the verdict schema, fences the agent's output and the
+expected-output text in per-call nonce markers (stripping any copy of the nonce first) and labels all of it untrusted
+evidence, and strictly decodes the structured payload; nothing is ever extracted from prose, so a verdict block the
+judge quotes from the content under test cannot stand in for its answer.
 
 ## TUI
 
@@ -199,7 +213,7 @@ through the same `plan.Build` the engine runs. A case renders as force-on (`☑`
 states — queued for all (`◉`), some (`◷`), or none (`○`) of its applicable enabled models; a harness off PATH and a
 model unsupported by the enabled harnesses render disabled. Before the form is built, each installed CLI that can report
 its account's model list is probed (`run.ProbeOfferedModels` over the optional `harness.OfferedModels` capability —
-Claude's client-side `/model` alias list, Codex's app-server `model/list`, Grok's `grok models`); a model the resolved
+Claude's client-side `/model` alias list and Codex's app-server `model/list`); a model the resolved
 harness does not offer starts deselected and renders muted with an `(unavail.)` tag, but stays toggleable. The probe
 fails open (no capability, error, or timeout deselects nothing) and is skipped entirely when `--model` names models
 explicitly. `request()` returns a `tui.RunRequest` carrying the Session's enabled selections and resolved
@@ -280,33 +294,3 @@ palette (chosen to degrade on limited terminals) plus the cyberdream accent colo
 and `util.go` the width-aware `truncate`/`clip` helpers. `tui_test.go` exercises the models directly — feeding `KeyMsg`s
 and `Reporter` messages into `Update`/`apply` and asserting on `view()` output — so the whole UI is tested without a
 terminal.
-
-## Web viewer
-
-`internal/web` (the `view` command) is a second presentation of the committed results, for exploration the fixed
-[Markdown report](README.md) cannot give: faceted filtering, column sorting, a cases⇄rollup toggle, and shareable
-snapshots. It is a localhost HTTP server hosting an embedded Vite/Preact single-page app over a **read-only** API —
-chosen over a static-HTML generator specifically so the page can update live while a run is in progress. The browser
-never launches or controls runs; the API only ever reads.
-
-The data seam is deliberately thin. `BuildDataset` walks the same results files the report does (`layout.EvalSets` +
-`results.LoadDir`) and flattens them into a flat list of per-case `Row`s — one row per trigger query or eval case,
-carrying the plugin/skill/provider/model/type/status the facets filter on. The server ships just that list; the SPA
-derives the facet option lists and the per-model rollup from it, so there is a single source of truth and no server-side
-aggregation to drift from the rows. The rollup-with-deltas in `EVALUATION.json` is intentionally not duplicated here.
-
-Live updates reuse a different seam than the TUI. The dashboard is wired into the engine's `run.Reporter` and sees every
-case as it finishes; the viewer instead polls the results files' mtimes (`watch.go`) and fans a `results-changed` event
-out to connected browsers through an SSE broker (`sse.go`), which refetch `/api/results`. That keeps the viewer fully
-decoupled from the engine — any run, TUI, or CI that rewrites the files refreshes an open page — at the cost of
-per-file-write rather than per-case granularity. A future `evolve run … --web` could attach an in-process web reporter
-for per-case streaming (the engine-coupled path the TUI already uses); v1 ships only the decoupled watch.
-
-The SPA is built to a single self-contained `index.html` (`vite-plugin-singlefile`), which makes both embedding and
-snapshot export trivial. The bundle is embedded behind a build tag (`embed_ui.go`, `-tags withui`): a bare `go build`
-compiles the stub and serves a "not bundled" page, while `make build` and the release pipeline build the UI first and
-embed it — so `git`-clean checkouts and `go vet`/`go test` never need the Node toolchain, only `make build` does.
-Snapshot export (`snapshot.go`, and the client-side `downloadSnapshot`) injects the dataset into that single file as
-`window.__EVOLVE_SNAPSHOT__`; the app reads the global on boot and, when present, runs offline from it with the captured
-filters pre-applied. `<` is escaped in the injected JSON so case text containing `</script>` cannot break out of the
-element.

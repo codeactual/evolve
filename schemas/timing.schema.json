@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/timing.schema.json",
+  "$id": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/timing.schema.json",
   "title": "timing.json (skill-creator superset)",
   "description": "Wall-clock and token timing for one run, compatible with skill-creator's timing.json. Evolve populates executor_duration_seconds (the agent run; grading excluded) and total_tokens; the grader fields await grading instrumentation.",
   "type": "object",

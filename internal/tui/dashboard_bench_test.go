@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // These benchmarks bound the cost of one dashboard frame. The live run drives a

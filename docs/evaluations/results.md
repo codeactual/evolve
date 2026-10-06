@@ -37,8 +37,8 @@ suite produces a byte-identical file. The mechanics of the write are in
 
 A results file is nested **model-major**: a top-level header, then a `models` map keyed by `provider/model-id`, and
 under each model up to two entries — `triggers` and `evals` — either of which is absent when that tier hasn't run for
-the model. The key is provider-qualified (`anthropic/claude-opus-4-8`) because a harness like Cursor can drive another
-vendor's model, and the prefix keeps those ids from colliding.
+the model. The key is provider-qualified (`anthropic/claude-opus-4-8`) because a harness can drive another vendor's
+model, and the prefix keeps those ids from colliding.
 
 | Field    | Meaning                                                                          |
 | -------- | -------------------------------------------------------------------------------- |
@@ -66,12 +66,11 @@ Per-case detail differs by tier. A **trigger** result records the `query`, wheth
 a tri-state `passed` (null when skipped or errored), a `runtime_error` string when the agent run failed outright, the
 graded `expectations` (each with its `text`, `passed`, and `evidence`), and `execution_metrics`/`timing` for the run.
 
-!!! note "Usage and pricing are grouped, not nulled"
-
-    Token figures live in two optional sub-objects: `estimate` (input tokens from the provider's counting API over
-    `SKILL.md` + the query/prompt, priced at the input rate) and `measured` (the harness-reported consumption — fresh
-    input, cache reads/writes, output, and total cost). A provider that can't count or report usage simply omits the
-    sub-object, so an absent figure stays distinguishable from a measured zero.
+> [!NOTE]
+> **Usage and pricing are grouped, not nulled.** Token figures live in two optional sub-objects: `estimate` (input
+> tokens from the provider's counting API over `SKILL.md` + the query/prompt, priced at the input rate) and `measured`
+> (the harness-reported consumption — fresh input, cache reads/writes, output, and total cost). A provider that can't
+> count or report usage simply omits the sub-object, so an absent figure stays distinguishable from a measured zero.
 
 Alongside the current run, an entry keeps compact **prior snapshots** so the report can show movement without a re-run:
 
@@ -81,11 +80,10 @@ Alongside the current run, an entry keeps compact **prior snapshots** so the rep
 Snapshots store only the summary and per-case scalars, never the full expectation/timing detail, so the file stays
 readable. The deltas themselves are **derived at report time**, not stored.
 
-!!! tip "The schema is the contract"
-
-    The field-by-field contract — including every optional sub-object — lives in the JSON Schemas under
-    [`schemas/`](https://github.com/bitwise-media-group/evolve/tree/main/schemas) (`results.schema.json` and the shared
-    `common.schema.json`). Point your editor at them with a `"$schema"` key for validation and completion.
+> [!TIP]
+> **The schema is the contract.** The field-by-field contract — including every optional sub-object — lives in the JSON
+> Schemas under [`schemas/`](https://github.com/codeactual/evolve/tree/main/schemas) (`results.schema.json` and the
+> shared `common.schema.json`). Point your editor at them with a `"$schema"` key for validation and completion.
 
 Once the results are written, `evolve report` renders them into the repository's reports — see
 [Reviewing reports](../reports/index.md).

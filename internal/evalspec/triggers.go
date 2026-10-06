@@ -6,7 +6,7 @@ package evalspec
 import (
 	"fmt"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/encfmt"
 )
 
 // Trigger is one trigger-accuracy query. Triggers carry no model restriction of

@@ -10,9 +10,9 @@ import (
 )
 
 // Provider is a model vendor: the entity that owns and prices a family of
-// models (Anthropic, OpenAI, Google, Cursor, xAI). It is distinct from a harness —
-// the CLI that drives a model — because several harnesses can run one vendor's
-// model (Claude Code and Copilot both run Claude Sonnet).
+// models (Anthropic, OpenAI). It is distinct from a harness — the CLI that
+// drives a model — because a harness drives a model without owning it, so the
+// same harness can run many vendors' models.
 type Provider struct {
 	ID   string `json:"id"`   // registry key, e.g. "anthropic"
 	Name string `json:"name"` // human name, e.g. "Anthropic"
@@ -25,8 +25,8 @@ type Provider struct {
 //
 // Supported maps each harness id that can run this model to the CLI-specific
 // model-id string that harness's --model flag expects — this is where harness
-// id divergence lives (Claude Code wants "claude-sonnet-4-6", Copilot wants
-// "claude-sonnet-4.6"). Preferred is the harness chosen when several supported
+// id divergence lives (Claude Code wants "claude-sonnet-4-6", Codex wants ids
+// like "gpt-5.5"). Preferred is the harness chosen when several supported
 // harnesses are eligible; it is always a key of Supported.
 type Model struct {
 	ID         string            `json:"id"`
@@ -46,6 +46,10 @@ type CommandSpec struct {
 	Dir   string   // workspace the agent runs in
 	Env   []string // extras appended to os.Environ()
 	Stdin []byte   // fed to the process's stdin, then closed; nil = no stdin
+	// ReadPaths are host paths the run may read but not write: bound read-only
+	// inside the sandbox at their real path (the bridged credential files, the
+	// judge's view of a workspace). Ignored when the run is unsandboxed.
+	ReadPaths []string
 }
 
 // Usage is the harness-reported consumption of one live agent session. Fields
@@ -81,13 +85,19 @@ const DefaultMaxTurns = 20
 type EvalInput struct {
 	Prompt   string
 	MaxTurns int // 0 = the harness default (DefaultMaxTurns)
-	// HostSandboxed reports that evolve already confines this run in its own OS
-	// sandbox. Harnesses whose agent CLI applies its own OS sandbox must then
-	// disable it: macOS Seatbelt (and the Linux equivalents) cannot nest, so a
-	// second sandbox layer aborts every shell command the agent runs. When
-	// false, evolve runs unconfined and the agent's own sandbox is the sole
-	// protection, so it is left enabled.
-	HostSandboxed bool
+	// InnerSandbox configures the agent CLI's own sandbox, which is always on.
+	InnerSandbox InnerSandbox
+}
+
+// JudgeInput is what a harness needs to build one LLM-judge session: the
+// grading prompt, the turn ceiling, the agent's workspace (which the judge may
+// only read), and the JSON Schema the verdicts must satisfy. The session runs
+// in its own directory, never in the workspace it grades.
+type JudgeInput struct {
+	Prompt    string
+	MaxTurns  int
+	Workspace string // the agent's workspace, exposed to the judge read-only
+	Schema    string // JSON Schema of the verdicts object
 }
 
 // DefaultJudgeMaxTurns is the agent-turn ceiling for an LLM-judge session on

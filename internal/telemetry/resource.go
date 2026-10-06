@@ -16,7 +16,8 @@ import (
 // conflict. A non-nil error is a best-effort warning — the returned resource is
 // still usable — so Init ignores it rather than failing.
 func buildResource(ctx context.Context, cfg Config) (*resource.Resource, error) {
-	return resource.New(ctx,
+	return resource.New(
+		ctx,
 		resource.WithAttributes(
 			semconv.ServiceName(orDefault(cfg.ServiceName, "evolve")),
 			semconv.ServiceVersion(orDefault(cfg.ServiceVersion, "dev")),

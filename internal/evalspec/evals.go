@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/encfmt"
 )
 
 // Assertion is one graded condition of a behavioral eval. In the authored

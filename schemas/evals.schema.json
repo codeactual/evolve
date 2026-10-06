@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/evals.schema.json",
+  "$id": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/evals.schema.json",
   "title": "evolve evals file",
   "description": "Authored behavioral evals for one skill (evals/<skill>/evals.<ext>; json, jsonc, or yaml). A superset of skill-creator's evals.json: a verbatim skill-creator file validates unchanged.",
   "type": "object",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/triggers.schema.json",
+  "$id": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/triggers.schema.json",
   "title": "evolve triggers file",
   "description": "Authored trigger-accuracy queries for one skill (evals/<skill>/triggers.<ext>; json, jsonc, or yaml). The envelope mirrors skill-creator's evals.json shape.",
   "type": "object",

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/evalspec"
 )
 
 func TestTriggerContentHashTracksFrontmatter(t *testing.T) {
@@ -113,8 +113,10 @@ func TestEvalFingerprint(t *testing.T) {
 	if err := os.WriteFile(seed, []byte("seed v1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	withFile := evalspec.Eval{ID: "1", Prompt: "p",
-		Files: []evalspec.FileRef{{Dest: "seed.txt", Source: seed}}}
+	withFile := evalspec.Eval{
+		ID: "1", Prompt: "p",
+		Files: []evalspec.FileRef{{Dest: "seed.txt", Source: seed}},
+	}
 	noFile := evalspec.Eval{ID: "1", Prompt: "p"}
 
 	// Folding the fixture in must change the fingerprint relative to the spec alone.

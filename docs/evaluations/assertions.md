@@ -112,11 +112,10 @@ The negation of `regex`: passes when `pattern` does **not** match. Use it to ass
 
 This guards a pytest suite against stdlib `unittest` leaking in.
 
-!!! warning "A missing file fails `not_regex`"
-
-    When `path` is set, the file is read before matching. If the file doesn't exist the assertion **fails** rather than
-    vacuously passing — so `not_regex` with a `path` effectively asserts "the file exists _and_ does not contain this".
-    To assert a file is gone, use [`file_absent`](#file_absent).
+> [!WARNING]
+> **A missing file fails `not_regex`.** When `path` is set, the file is read before matching. If the file doesn't exist
+> the assertion **fails** rather than vacuously passing — so `not_regex` with a `path` effectively asserts "the file
+> exists _and_ does not contain this". To assert a file is gone, use [`file_absent`](#file_absent).
 
 | Field     | Required | Meaning                                                                   |
 | --------- | -------- | ------------------------------------------------------------------------- |
@@ -196,9 +195,13 @@ Graded by an LLM judge instead of a fixed rule. The judge is one pinned model (`
 comparable across providers; it is driven by whichever installed harness supports that model. All of a case's `llm`
 assertions are graded in **one judge session**: the judge reads the numbered assertion texts, the agent's final
 response, and the eval's `expected_output` (as context, never a separate check), may inspect the workspace, and returns
-a pass/fail verdict with a short evidence quote **per assertion**. The judge runs with the same tool posture as the eval
-agent — evolve's OS sandbox is the confinement, not a tool allowlist — which is why deterministic assertions always
-grade before the judge session runs (see [How evaluations run](execution.md)).
+a pass/fail verdict with a short evidence quote **per assertion**. The judge runs in its own directory with a
+read-only view of the workspace — Claude with read-only tools and project settings, hooks and MCP disabled, Codex in its
+read-only sandbox — so it can neither change what it grades nor be steered by files the agent left behind. The agent's
+response and `expected_output` are quoted inside nonce-marked fences and treated as untrusted evidence, never
+instructions, and the verdicts come back as schema-constrained structured output that is strictly decoded (anything
+else fails every `llm` assertion of the case with a judge error). Deterministic assertions always grade before the judge
+session runs, so it sees the workspace as they left it (see [How evaluations run](execution.md)).
 
 ```json
 {
@@ -288,5 +291,5 @@ the part only prose can describe.
 
 For the case around these assertions — the prompt, input `files`/fixtures, and the per-case run controls — see
 [Behavioral evals](evals.md). Every field above is validated by the
-[`evals` JSON Schema](https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/evals.schema.json);
+[`evals` JSON Schema](https://raw.githubusercontent.com/codeactual/evolve/main/schemas/evals.schema.json);
 point your editor at it via a `"$schema"` key for completion and inline errors.

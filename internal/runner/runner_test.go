@@ -6,13 +6,11 @@ package runner
 import (
 	"bytes"
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 func sh(script string) model.CommandSpec {
@@ -77,34 +75,6 @@ func TestRunScanHitExitsEarly(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 10*time.Second {
 		t.Errorf("early exit took %s, want well under the sleep", elapsed)
-	}
-}
-
-func TestRunSideHitExitsEarly(t *testing.T) {
-	// No stdout signal — SideHit fires via a marker file after a short delay,
-	// simulating a Grok PreToolUse hook writing EVOLVE_HIT_FILE.
-	dir := t.TempDir()
-	marker := filepath.Join(dir, "hit")
-	spec := sh(`sleep 60`)
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		_ = os.WriteFile(marker, []byte("1"), 0o644)
-	}()
-	start := time.Now()
-	res, err := (&Exec{}).Run(context.Background(), spec, 30*time.Second, &Scan{
-		SideHit: func() bool {
-			_, err := os.Stat(marker)
-			return err == nil
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !res.Hit {
-		t.Error("want side-channel hit")
-	}
-	if elapsed := time.Since(start); elapsed > 5*time.Second {
-		t.Errorf("side hit took %s, want well under the sleep", elapsed)
 	}
 }
 

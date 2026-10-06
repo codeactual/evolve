@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/tokencount"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/tokencount"
 )
 
 // nativeHarness maps a provider id to the harness that natively drives it, used
@@ -17,9 +17,6 @@ import (
 var nativeHarness = map[string]string{
 	model.ProviderAnthropic: model.HarnessClaude,
 	model.ProviderOpenAI:    model.HarnessCodex,
-	model.ProviderGoogle:    model.HarnessGemini,
-	model.ProviderCursor:    model.HarnessCursor,
-	model.ProviderXAI:       model.HarnessGrok,
 }
 
 // ModelOverrides parses any providers.<name>.models lists from the config file

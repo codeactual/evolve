@@ -11,8 +11,8 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 func TestWrapReporterDisabledReturnsInput(t *testing.T) {

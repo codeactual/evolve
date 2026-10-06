@@ -6,14 +6,17 @@ package run
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/runner"
 )
 
 // specRunner records the spec it ran and returns a canned result.
@@ -37,69 +40,84 @@ func fakeJudgeSelection() harness.Selection {
 }
 
 func TestHarnessJudge(t *testing.T) {
-	r := &specRunner{result: runner.Result{Stdout: []byte(`{"verdicts": [{"id": 1, "passed": true}]}`)}}
-	j, err := NewHarnessJudge(fakeJudgeSelection(), r, true)
+	r := &specRunner{result: runner.Result{Stdout: []byte(`{"verdicts": [{"id": 1, "passed": true, "evidence": "e"}]}`)}}
+	j, err := NewHarnessJudge(fakeJudgeSelection(), r, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ws := t.TempDir()
-	text, err := j.Judge(context.Background(), ws, "the prompt", 7*time.Second)
+	payload, err := j.Judge(context.Background(), ws, "the prompt", 7*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(text, `"passed": true`) {
-		t.Errorf("text = %q", text)
+	if !strings.Contains(payload, `"passed": true`) {
+		t.Errorf("payload = %q", payload)
 	}
-	// The spec is the harness's EvalSpec at the judge turn ceiling with Argv[0]
-	// resolved to the installed CLI — the fake harness's CLI is "sh", which
-	// LookPath resolves absolutely.
+	// The spec is the harness's JudgeSpec with Argv[0] resolved to the installed
+	// CLI — the fake harness's CLI is "sh", which LookPath resolves absolutely.
 	if !strings.HasSuffix(r.gotSpec.Argv[0], "/sh") {
 		t.Errorf("Argv[0] = %q, want resolved sh path", r.gotSpec.Argv[0])
 	}
-	if r.gotSpec.Argv[1] != "AGENT" || r.gotSpec.Argv[2] != "the prompt" {
-		t.Errorf("argv = %v, want the fake EvalSpec shape", r.gotSpec.Argv)
+	if r.gotSpec.Argv[1] != "JUDGE" || r.gotSpec.Argv[2] != "the prompt" {
+		t.Errorf("argv = %v, want the fake JudgeSpec shape", r.gotSpec.Argv)
 	}
 	if r.gotSpec.Argv[3] != strconv.Itoa(model.DefaultJudgeMaxTurns) {
 		t.Errorf("MaxTurns = %s, want the judge turn ceiling %d", r.gotSpec.Argv[3], model.DefaultJudgeMaxTurns)
 	}
-	if r.gotSpec.Dir != ws {
-		t.Errorf("Dir = %q, want the eval workspace", r.gotSpec.Dir)
+	if !strings.Contains(r.gotSpec.Argv[4], `"verdicts"`) {
+		t.Errorf("schema arg = %q, want the grade verdict schema", r.gotSpec.Argv[4])
+	}
+	if !slices.Contains(r.gotSpec.ReadPaths, ws) {
+		t.Errorf("ReadPaths = %v, want the eval workspace as a read-only path", r.gotSpec.ReadPaths)
 	}
 	if r.gotTimeout != 7*time.Second {
 		t.Errorf("timeout = %s, want 7s", r.gotTimeout)
 	}
 }
 
-// TestHarnessJudgeClaudePosture pins the real claude judge argv: the eval
-// posture (permissions bypassed, no tool allowlist — evolve's sandbox is the
-// confinement) at the raised judge turn ceiling. Built directly rather than
-// through NewHarnessJudge so the test never needs a claude CLI on PATH.
-func TestHarnessJudgeClaudePosture(t *testing.T) {
-	// A set credential var keeps the harness isolation setup from consulting
-	// the host's real Keychain.
-	t.Setenv("CLAUDE_CODE_OAUTH_TOKEN", "test-token")
-	c := harness.NewClaude()
-	m := model.Model{
-		ID: "anthropic/claude-sonnet-5", ProviderID: "anthropic",
-		Supported: map[string]string{"claude": "sonnet"}, Preferred: "claude",
-	}
-	r := &specRunner{result: runner.Result{Stdout: []byte(`{"verdicts": [{"id": 1, "passed": true}]}`)}}
-	j := &HarnessJudge{
-		sel:  harness.Selection{Model: m, Harness: c},
-		eval: c, cli: "claude", runner: r, hostSandboxed: true,
-	}
-	if _, err := j.Judge(context.Background(), t.TempDir(), "verdict?", time.Second); err != nil {
+// TestHarnessJudgeSeparateDir pins that the judge never runs inside the
+// agent-modified workspace: it gets its own directory next to it.
+func TestHarnessJudgeSeparateDir(t *testing.T) {
+	r := &specRunner{result: runner.Result{Stdout: []byte(`{}`)}}
+	j, err := NewHarnessJudge(fakeJudgeSelection(), r, true)
+	if err != nil {
 		t.Fatal(err)
 	}
-	argv := strings.Join(r.gotSpec.Argv, " ")
-	if !strings.Contains(argv, "--permission-mode bypassPermissions") {
-		t.Errorf("want --permission-mode bypassPermissions: %v", r.gotSpec.Argv)
+	ws := t.TempDir()
+	if _, err := j.Judge(context.Background(), ws, "p", time.Second); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(argv, "--max-turns 16") {
-		t.Errorf("want --max-turns 16: %v", r.gotSpec.Argv)
+	dir := r.gotSpec.Dir
+	if dir == "" || dir == ws || strings.HasPrefix(dir, ws+string(filepath.Separator)) {
+		t.Errorf("judge Dir = %q, must be neither the workspace %q nor inside it", dir, ws)
 	}
-	if strings.Contains(argv, "--allowedTools") {
-		t.Errorf("want no --allowedTools on the judge: %v", r.gotSpec.Argv)
+	if filepath.Dir(dir) != filepath.Dir(ws) {
+		t.Errorf("judge Dir %q does not share the workspace's parent %q", dir, filepath.Dir(ws))
+	}
+}
+
+func TestHarnessJudgeRemovesDir(t *testing.T) {
+	for _, keep := range []bool{false, true} {
+		r := &specRunner{result: runner.Result{Stdout: []byte(`{}`)}}
+		j, err := NewHarnessJudge(fakeJudgeSelection(), r, keep)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := j.Judge(context.Background(), t.TempDir(), "p", time.Second); err != nil {
+			t.Fatal(err)
+		}
+		_, statErr := os.Stat(r.gotSpec.Dir)
+		if keep && statErr != nil {
+			t.Errorf("keep=true: judge dir %s was removed (%v), want it kept", r.gotSpec.Dir, statErr)
+		}
+		if !keep && !os.IsNotExist(statErr) {
+			t.Errorf("keep=false: judge dir %s still exists (%v), want it removed", r.gotSpec.Dir, statErr)
+		}
+		if keep {
+			if err := os.RemoveAll(r.gotSpec.Dir); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 }
 
@@ -128,7 +146,8 @@ func TestHarnessJudgeErrors(t *testing.T) {
 }
 
 func TestNewHarnessJudgeRejectsNonEvalHarness(t *testing.T) {
-	sel := harness.Selection{Model: model.Model{ID: "google/gemini"}, Harness: harness.NewGemini()}
+	// fakeTriggerProvider implements harness.Harness but not EvalRunner.
+	sel := harness.Selection{Model: model.Model{ID: "fake/model-1"}, Harness: &fakeTriggerProvider{}}
 	if _, err := NewHarnessJudge(sel, &specRunner{}, false); err == nil ||
 		!strings.Contains(err.Error(), "cannot run headless judge sessions") {
 		t.Errorf("err = %v, want headless-judge rejection", err)

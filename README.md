@@ -1,8 +1,11 @@
 # evolve
 
-`evolve` is a Go CLI for evaluating coding-agent plugins and plugin repositories. It validates plugin structure, checks
-whether skills trigger for the right prompts, runs behavioral eval suites in throwaway workspaces, and writes committed
-Markdown/JSON rollups for review and CI.
+`evolve` is a Linux Go CLI for evaluating coding-agent plugins and plugin repositories. It validates plugin structure,
+checks whether skills trigger for the right prompts, runs behavioral eval suites in throwaway workspaces, and writes
+committed Markdown/JSON rollups for review and CI. It drives the Claude Code and OpenAI Codex CLIs.
+
+This is a fork of [`github.com/bitwise-media-group/evolve`](https://github.com/bitwise-media-group/evolve), slimmed to
+Linux, Claude Code and Codex, with a hardened agent sandbox (see [SECURITY.md](SECURITY.md)).
 
 The pipeline is split into three tiers:
 
@@ -10,11 +13,10 @@ The pipeline is split into three tiers:
 - Tier 1 `triggers`: prompt-level checks that verify the expected skill activates.
 - Tier 2 `evals`: behavioral cases that run real agent CLIs and grade the result.
 
-<!-- prettier-ignore -->
 > [!TIP]
-> **New to evolve?** Read the full docs at **[oss.bitwisemedia.uk/evolve](https://oss.bitwisemedia.uk/evolve/)** —
-> getting started, authoring evaluations (triggers, behavioral evals, fixtures, and how they run), the configuration
-> reference, and the TUI guide.
+> **New to evolve?** Start with [docs/getting-started.md](docs/getting-started.md), then read how to author
+> [evaluations](docs/evaluations/index.md), the [configuration reference](docs/config/index.md), and the
+> [TUI guide](docs/tui.md).
 
 ## Supported repositories
 
@@ -42,41 +44,56 @@ per model, through that harness.
 
 Built-in harnesses, each needing its runner CLI on `PATH` and whatever credentials that CLI requires:
 
-| Harness        | Runner CLI     |
-| -------------- | -------------- |
-| Claude Code    | `claude`       |
-| OpenAI Codex   | `codex`        |
-| Gemini         | `gemini`       |
-| Cursor         | `cursor-agent` |
-| GitHub Copilot | `copilot`      |
-| Antigravity    | `agy`          |
-| Grok           | `grok`         |
+| Harness      | Runner CLI | Provider  |
+| ------------ | ---------- | --------- |
+| Claude Code  | `claude`   | Anthropic |
+| OpenAI Codex | `codex`    | OpenAI    |
 
-Built-in providers (the model vendors) are **Anthropic**, **OpenAI**, **Google**, **Cursor**, and **xAI** — Cursor is
-both a provider (it owns Composer) and a harness; xAI models are driven by the Grok harness. Run `evolve doctor` from a
-plugin repository to check the environment, credentials, and runner CLIs, and `evolve models` to see the effective
-provider / model / harness matrix.
+Run `evolve doctor` from a plugin repository to check the environment, credentials, runner CLIs and the sandbox, and
+`evolve models` to see the effective provider / model / harness matrix. The sandbox behavior was verified with `claude`
+2.1.289 and `codex` 0.160.0 (on 2026-10-05); evolve does not gate on a CLI version.
 
 ## Install
 
-Install with Homebrew on macOS and Linux:
+`evolve` runs on Linux only. Build from source with Go:
 
 ```sh
-brew install --cask bitwise-media-group/tap/evolve
-```
-
-Build from source with Go:
-
-```sh
-go install github.com/bitwise-media-group/evolve/cmd/evolve@latest
+go install github.com/codeactual/evolve/cmd/evolve@latest
 ```
 
 Or build this checkout:
 
 ```sh
 make build
-./evolve version
+./builds/evolve version
 ```
+
+The sandbox needs `bubblewrap` (non-setuid), `socat`, and nested unprivileged user namespaces; on Ubuntu 24.04+ that
+also means pointing `sandbox.bwrap_path` at a bubblewrap copy outside AppArmor's `/usr/bin/bwrap` profile. See
+[docs/installation.md](docs/installation.md).
+
+## Sandbox and trust
+
+Agents run with permission prompts off, so containment is the control. The repository under test is untrusted; the
+operator is trusted. By default:
+
+- Every agent run executes in a **deny-by-default bubblewrap sandbox**: only the system directories, the repository
+  (read-only), the run directory, the agent CLI, the operator's git config and the bridged credential files
+  (read-only), and grants listed in `sandbox.read_paths` / `sandbox.write_paths` are visible. The home directory is not
+  mounted (`HOME` stays set, ephemeral). The network stays shared.
+- The agent CLIs' **own sandboxes stay on**, layered inside: agent shell commands get no network until you opt in with
+  `sandbox.claude_allowed_domains` or `sandbox.codex_network_access`. `evolve run` refuses to start when the nested
+  sandboxes cannot start.
+- Agents get an **allowlisted environment**, not your whole shell.
+- Agents are kept **first-party only**: web, remote and messaging tools denied, MCP servers and connectors off, and
+  `evolve run` refuses to start if the CLI's session surface is not local-only (`evolve doctor` shows the posture).
+- `sandbox.*`, `cache_dir` and `telemetry.*` are **operator-only**: set them with flags, `EVOLVE_*` variables, or
+  `~/.config/evolve/config.<ext>`. A repository `.evolve.<ext>` that sets them fails with exit 2.
+- The LLM judge runs in its own directory with a read-only view of the workspace and returns schema-constrained
+  verdicts.
+
+`--no-sandbox` turns the outer sandbox off for one run. [SECURITY.md](SECURITY.md) lists the accepted residual risks,
+including the shared network, the bridged credentials, and tokens kept in git config.
 
 ## Quick start
 
@@ -199,7 +216,7 @@ evolve report --check --min-triggers-pass-rate 0.95 --min-evals-pass-rate 0.90
 
 Top-level commands:
 
-- `evolve doctor`: check harness runner CLIs, credentials, and counting APIs.
+- `evolve doctor`: check harness runner CLIs, credentials, counting APIs, and the sandbox.
 - `evolve models`: show the effective provider / model / harness matrix and pricing metadata.
 - `evolve report`: regenerate evaluation rollups from stored results.
 - `evolve run`: run static checks, trigger checks, behavioral evals, or the full pipeline.
@@ -220,11 +237,12 @@ Common global flags:
 - `--json`: emit machine-readable JSONL progress.
 - `-v, --verbose`: enable debug logging.
 
-See [docs/cli/evolve.md](docs/cli/evolve.md) for the generated command reference.
+Run `evolve <command> --help` for each command's flags.
 
 ## Configuration
 
-`evolve` reads at most one config file from the repository root:
+`evolve` reads at most one repository config file from the repository root, and an optional user-level config at
+`~/.config/evolve/config.<ext>`:
 
 - `.evolve.yaml`
 - `.evolve.yml`
@@ -234,16 +252,16 @@ See [docs/cli/evolve.md](docs/cli/evolve.md) for the generated command reference
 Settings are layered in this order:
 
 1. Built-in defaults.
-2. The config file.
-3. `EVOLVE_*` environment variables.
-4. Explicit CLI flags.
+2. The user-level config file.
+3. The repository config file.
+4. `EVOLVE_*` environment variables.
+5. Explicit CLI flags.
 
 Common settings:
 
 - `layout`
 - `models`
 - `harnesses`
-- `cache_dir`
 - `results_format`
 - `max_turns`
 - `stale_results`
@@ -251,27 +269,31 @@ Common settings:
 - `report.thresholds.*`
 - `providers.<name>.models`
 
-Read [docs/config/index.md](docs/config/index.md) for the full generated configuration reference and annotated example
-configs.
+Operator-only settings (never valid in a repository config): `sandbox.*`, `cache_dir`, `telemetry.dir`.
+
+Read [docs/config/index.md](docs/config/index.md) for the full configuration reference.
 
 ## Development
 
-Common targets:
+Common targets (run from this directory; the Makefile is self-contained):
 
 ```sh
 make fmt
-make test
-make lint
-make docs
+make ci
 make smoke
-make pr
+make live
+make security_scan
 ```
 
 Notes:
 
-- `make docs` regenerates committed CLI, manpage, and config docs under `docs/`.
-- `make smoke` runs the live end-to-end test in `e2e/` and requires the relevant provider CLI and credentials.
-- `tools/` is a separate Go module for pinned developer CLIs.
+- `make ci` runs vet, import and gofumpt checks, the race tests (including live bubblewrap enforcement tests, which
+  need a non-setuid `bwrap` and user namespaces), the static analyzers (gocyclo, ineffassign, errcheck, staticcheck,
+  revive, `go fix` check) and the build.
+- `make security_scan` runs osv-scanner and trivy. It is deliberately not part of `ci`.
+- `make smoke` runs the live end-to-end test in `e2e/` and requires the `claude` CLI and its credentials.
+- `make live` runs the credentialed tests against the real `claude` and `codex` inside the real sandbox. It needs
+  `EVOLVE_LIVE_BWRAP` set to an AppArmor-unprofiled bubblewrap copy.
 - `e2e/` is a separate Go module for live smoke coverage and fixture repositories.
 
 ## Project layout
@@ -279,17 +301,15 @@ Notes:
 ```text
 cmd/evolve/   cobra CLI entrypoint and subcommands
 internal/     core packages by concern
-docs/         generated CLI, manpage, and config reference
+docs/         authored Markdown documentation
 schemas/      JSON Schemas for eval and report data
 e2e/          separate module for end-to-end smoke coverage
-tools/        separate module for pinned developer tooling
 security/     code-scanning and security notes
 ```
 
 ## Further reading
 
-- **[Documentation site](https://oss.bitwisemedia.uk/evolve/)** — getting started, authoring evaluations, configuration,
-  and the TUI guide.
+- [docs/getting-started.md](docs/getting-started.md), [docs/evaluations/index.md](docs/evaluations/index.md) and
+  [docs/config/index.md](docs/config/index.md) for usage, authoring and configuration.
 - [DESIGN.md](DESIGN.md) for architecture, engine boundaries, and TUI wiring.
-- [docs/cli/evolve.md](docs/cli/evolve.md) for generated command documentation.
-- [docs/config/index.md](docs/config/index.md) for the full config surface.
+- [SECURITY.md](SECURITY.md) for the trust model and accepted residual risks.

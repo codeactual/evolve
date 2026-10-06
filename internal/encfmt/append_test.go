@@ -113,8 +113,8 @@ func TestAppendToListJSONCPreservesComments(t *testing.T) {
 
 func TestAppendToListJSONCreatesNestedPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".evolve.json")
-	out := writeAppend(t, path, "{\"layout\": \"single\"}\n", []string{"providers", "google", "models"},
-		appendEntry{ID: "gemini-4"})
+	out := writeAppend(t, path, "{\"layout\": \"single\"}\n", []string{"providers", "openai", "models"},
+		appendEntry{ID: "gpt-6"})
 	var cfg struct {
 		Layout    string `json:"layout"`
 		Providers map[string]struct {
@@ -124,7 +124,7 @@ func TestAppendToListJSONCreatesNestedPath(t *testing.T) {
 	if err := DecodeFile(path, &cfg); err != nil {
 		t.Fatalf("DecodeFile: %v", err)
 	}
-	if cfg.Layout != "single" || len(cfg.Providers["google"].Models) != 1 {
+	if cfg.Layout != "single" || len(cfg.Providers["openai"].Models) != 1 {
 		t.Errorf("unexpected result:\n%s", out)
 	}
 }

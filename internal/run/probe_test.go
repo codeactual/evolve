@@ -9,12 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/runner"
 )
 
 // listingHarness is a fake harness with the OfferedModels capability.
@@ -43,15 +44,16 @@ func onPathBase(t *testing.T) harness.Harness {
 
 func TestProbeOfferedModels(t *testing.T) {
 	base := onPathBase(t)
+	nonOffering := &fakeTriggerProvider{} // no OfferedModels capability
 	hs := []harness.Harness{
 		listingHarness{Harness: base, offered: []string{"Sonnet 5"}},
-		harness.NewGemini(), // no OfferedModels capability
+		nonOffering,
 	}
 	got := ProbeOfferedModels(t.Context(), &runner.Exec{}, hs, time.Second)
 	if !slices.Equal(got[base.ID()], []string{"Sonnet 5"}) {
 		t.Errorf("offered[%s] = %v, want [Sonnet 5]", base.ID(), got[base.ID()])
 	}
-	if _, ok := got[harness.NewGemini().ID()]; ok {
+	if _, ok := got[nonOffering.ID()]; ok {
 		t.Error("harness without the capability should be absent (unknown)")
 	}
 }
@@ -73,7 +75,8 @@ type fakeProbeRunner struct {
 }
 
 func (f *fakeProbeRunner) Run(_ context.Context, spec model.CommandSpec, _ time.Duration,
-	scan *runner.Scan) (runner.Result, error) {
+	scan *runner.Scan,
+) (runner.Result, error) {
 	f.spec = spec
 	if scan == nil {
 		return runner.Result{Stdout: []byte(joinLines(f.lines))}, nil
@@ -87,11 +90,11 @@ func (f *fakeProbeRunner) Run(_ context.Context, spec model.CommandSpec, _ time.
 }
 
 func joinLines(lines []string) string {
-	out := ""
+	var out strings.Builder
 	for _, l := range lines {
-		out += l + "\n"
+		out.WriteString(l + "\n")
 	}
-	return out
+	return out.String()
 }
 
 func TestProbeExecResolvesCLIAndStopsEarly(t *testing.T) {
@@ -120,4 +123,50 @@ func TestProbeExecUnfinishedProtocolErrors(t *testing.T) {
 		func([]byte) bool { return false }); err == nil {
 		t.Error("probe that never saw its response should error, not return partial output")
 	}
+}
+
+// TestProbeExecRunsInFreshEmptyDir pins that every probe runs from its own
+// empty temp directory — never the process cwd (normally the repository under
+// test, whose project hooks and MCP servers a headless claude would load) — and
+// that the directory is gone afterward.
+func TestProbeExecRunsInFreshEmptyDir(t *testing.T) {
+	h := onPathBase(t)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seenDir string
+	var entries []os.DirEntry
+	rec := probeRunnerFunc(func(_ context.Context, spec model.CommandSpec, _ time.Duration,
+		_ *runner.Scan,
+	) (runner.Result, error) {
+		seenDir = spec.Dir
+		entries, _ = os.ReadDir(spec.Dir)
+		return runner.Result{Stdout: []byte("ok")}, nil
+	})
+	exec := probeExec(rec, h, time.Second)
+	if _, err := exec(t.Context(), model.CommandSpec{Argv: []string{"claude", "-p", "/model"}}, nil); err != nil {
+		t.Fatalf("probeExec: %v", err)
+	}
+	if seenDir == "" {
+		t.Fatal("probe ran with an empty Dir (inherits the process cwd)")
+	}
+	if seenDir == cwd || strings.HasPrefix(cwd, seenDir+string(os.PathSeparator)) {
+		t.Errorf("probe Dir = %q, must not be the process cwd %q or an ancestor of it", seenDir, cwd)
+	}
+	if len(entries) != 0 {
+		t.Errorf("probe Dir held %d entries while running, want a fresh empty dir", len(entries))
+	}
+	if _, err := os.Stat(seenDir); !os.IsNotExist(err) {
+		t.Errorf("probe Dir %q still exists after the probe (err=%v)", seenDir, err)
+	}
+}
+
+// probeRunnerFunc adapts a function to the probeRunner interface.
+type probeRunnerFunc func(context.Context, model.CommandSpec, time.Duration, *runner.Scan) (runner.Result, error)
+
+func (f probeRunnerFunc) Run(ctx context.Context, spec model.CommandSpec, timeout time.Duration,
+	scan *runner.Scan,
+) (runner.Result, error) {
+	return f(ctx, spec, timeout, scan)
 }

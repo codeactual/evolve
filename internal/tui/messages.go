@@ -4,9 +4,9 @@
 package tui
 
 import (
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 // Progress messages mirror the run.Reporter calls; tuiReporter sends them into

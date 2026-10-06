@@ -9,9 +9,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 // TestExecutingPaneScrolls verifies the result region scrolls so a verdict below

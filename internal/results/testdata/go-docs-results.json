@@ -2688,11 +2688,11 @@
         }
       }
     },
-    "antigravity/gemini-3.1-pro": {
+    "anthropic/claude-sonnet-5": {
       "triggers": {
-        "provider": "antigravity",
-        "model": "gemini-3.1-pro",
-        "display": "Antigravity — Gemini 3.1 Pro",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "display": "Claude Sonnet 5",
         "tool_version": "v0.2.1-16-gd19ac95",
         "ran_at": "2026-06-19T20:16:40Z",
         "executed": true,
@@ -2822,9 +2822,9 @@
         }
       },
       "evals": {
-        "provider": "antigravity",
-        "model": "gemini-3.1-pro",
-        "display": "Antigravity — Gemini 3.1 Pro",
+        "provider": "anthropic",
+        "model": "claude-sonnet-5",
+        "display": "Claude Sonnet 5",
         "tool_version": "v0.2.1-30-g92b77e3",
         "ran_at": "2026-06-20T20:36:14Z",
         "executed": true,
@@ -3072,11 +3072,11 @@
         }
       }
     },
-    "antigravity/gemini-3.5-flash": {
+    "openai/gpt-5.4-mini": {
       "evals": {
-        "provider": "antigravity",
-        "model": "gemini-3.5-flash",
-        "display": "Antigravity — Gemini 3.5 Flash",
+        "provider": "openai",
+        "model": "gpt-5.4-mini",
+        "display": "GPT-5.4 Mini",
         "tool_version": "v0.2.1-30-g92b77e3",
         "ran_at": "2026-06-20T20:36:33Z",
         "executed": true,

@@ -21,7 +21,7 @@ import (
 
 // scopeName is the instrumentation scope for telemetry's own logger bridge and
 // the decorator's meter; the engine packages use their own package paths.
-const scopeName = "github.com/bitwise-media-group/evolve"
+const scopeName = "github.com/codeactual/evolve"
 
 // ShutdownFunc flushes the providers and closes any open files. It is safe to
 // call once; later calls are no-ops.

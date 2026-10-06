@@ -16,14 +16,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/grade"
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/internal/workspace"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/grade"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/workspace"
 )
 
 // EvalOptions configures an eval sweep.
@@ -341,14 +341,15 @@ func evalBaselineNeeded(file *results.File, key string, c evalspec.Eval, execute
 }
 
 // baselineStale reports whether eval id needs its baseline (re)computed: missing
-// from the prior snapshot, or recorded against a different eval fingerprint.
+// from the prior snapshot, lacking a completed verdict, or recorded against a
+// different eval fingerprint. A completed failing verdict is still cacheable.
 func baselineStale(prior *results.EvalSnapshot, id, fp string) bool {
 	if prior == nil {
 		return true
 	}
 	for _, r := range prior.Results {
 		if r.ID == id {
-			return r.Fingerprint != fp
+			return r.RuntimeError != "" || r.Passed == nil || r.Fingerprint != fp
 		}
 	}
 	return true
@@ -446,9 +447,9 @@ func runEval(ctx context.Context, opts EvalOptions, sel harness.Selection, ref p
 	}
 	cliModelID, _ := sel.Model.CLIModelID(sel.Harness.ID())
 	spec := evalRunner.EvalSpec(ws, model.EvalInput{
-		Prompt:        c.Prompt,
-		MaxTurns:      maxTurns,
-		HostSandboxed: opts.HostSandboxed,
+		Prompt:       c.Prompt,
+		MaxTurns:     maxTurns,
+		InnerSandbox: opts.InnerSandbox,
 	}, cliModelID)
 	spec.Argv[0] = cli
 
@@ -681,9 +682,9 @@ func retainArtifacts(parent, ws string, stdout []byte) (workdir, logPath string)
 // fatal message sits at the end, so keep the tail and collapse newlines.
 func errorDetail(reason, stderrTail string) string {
 	tail := strings.ReplaceAll(strings.TrimSpace(stderrTail), "\n", " ")
-	const max = 200
-	if len(tail) > max {
-		tail = "…" + tail[len(tail)-max:]
+	const maxTail = 200
+	if len(tail) > maxTail {
+		tail = "…" + tail[len(tail)-maxTail:]
 	}
 	switch {
 	case reason != "" && tail != "":

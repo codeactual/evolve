@@ -42,13 +42,13 @@ picture).
 
 Then one **## &lt;plugin&gt;** section per plugin, each with up to two rollup tables.
 
-!!! note "Two kinds of empty cell"
-
-    The report distinguishes them deliberately, and the difference is decidable from the stored data:
-
-    - **`—`** — not measured _yet_. A rerun could fill it (e.g. a tier that hasn't run for that model).
-    - **`n/a`** — the provider can _never_ produce it: no counting API, no usage reporting, or no published pricing. It's
-      structurally absent, not zero.
+> [!NOTE]
+> **Two kinds of empty cell.** The report distinguishes them deliberately, and the difference is decidable from the
+> stored data:
+>
+> - **`—`** — not measured _yet_. A rerun could fill it (e.g. a tier that hasn't run for that model).
+> - **`n/a`** — the provider can _never_ produce it: no counting API, no usage reporting, or no published pricing. It's
+>   structurally absent, not zero.
 
 ### Rollup tables
 
@@ -85,11 +85,11 @@ A rendered slice of a single-layout report — the `solo` plugin section, with i
 
 #### Triggers
 
-| Provider  | Model                                 | Passed | Pass rate | Δ rate | Avg run | Input tokens | Est. input cost |
-| --------- | ------------------------------------- | ------ | --------- | ------ | ------- | ------------ | --------------- |
-| Anthropic | Claude Fable 5 (`claude-fable-5`)     | 1/2    | 50%       | -50%   | 7.1s    | 2,770        | $0.0277         |
-| Cursor    | Cursor Composer 2.5 (`composer-2.5`)  | 2/2    | 100%      | —      | 12.7s   | n/a          | n/a             |
-| Google    | Gemini 3.5 Flash (`gemini-3.5-flash`) | —      | —         | —      | —       | 2,580        | $0.0039         |
+| Provider  | Model                                               | Passed | Pass rate | Δ rate | Avg run | Input tokens | Est. input cost |
+| --------- | --------------------------------------------------- | ------ | --------- | ------ | ------- | ------------ | --------------- |
+| Anthropic | Claude Fable 5 (`claude-fable-5`)                   | 1/2    | 50%       | -50%   | 7.1s    | 2,770        | $0.0277         |
+| OpenAI    | GPT-5.3 Codex Spark (`gpt-5.3-codex-spark`)         | 2/2    | 100%      | —      | 12.7s   | 2,580        | n/a             |
+| OpenAI    | GPT-5.4 (`gpt-5.4`)                                 | —      | —         | —      | —       | 2,580        | $0.0065         |
 
 #### Evals
 

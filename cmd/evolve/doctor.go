@@ -14,11 +14,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/run"
-	"github.com/bitwise-media-group/evolve/internal/runner"
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 var doctorCmd = &cobra.Command{
@@ -34,13 +34,13 @@ var doctorCmd = &cobra.Command{
 			return err
 		}
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "HARNESS\tCLI\tCREDENTIAL")
+		outln(w, "HARNESS\tCLI\tCREDENTIAL")
 		for _, h := range harnesses {
 			cliPath := "missing (" + h.CLI()[0] + ")"
 			if path, ok := harness.Available(h); ok {
 				cliPath = path
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", h.ID(), cliPath, credentialStatus(h.EnvKeys()))
+			outf(w, "%s\t%s\t%s\n", h.ID(), cliPath, credentialStatus(h.EnvKeys()))
 		}
 		if err := w.Flush(); err != nil {
 			return err
@@ -50,21 +50,21 @@ var doctorCmd = &cobra.Command{
 		// account actually serves — the list the interactive form deselects
 		// against. Absent capability or a failed probe reads "unknown", the
 		// fail-open verdict.
-		offered := run.ProbeOfferedModels(cmd.Context(), &runner.Exec{}, harnesses,
+		offered := run.ProbeOfferedModels(cmd.Context(), &runner.Exec{InheritEnv: true}, harnesses,
 			offeredModelsProbeTimeout)
 		wm := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-		fmt.Fprintln(wm, "\nHARNESS\tOFFERED MODELS")
+		outln(wm, "\nHARNESS\tOFFERED MODELS")
 		for _, h := range harnesses {
-			fmt.Fprintf(wm, "%s\t%s\n", h.ID(), offeredStatus(h, offered))
+			outf(wm, "%s\t%s\n", h.ID(), offeredStatus(h, offered))
 		}
 		if err := wm.Flush(); err != nil {
 			return err
 		}
 
 		w2 := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-		fmt.Fprintln(w2, "\nPROVIDER\tTOKEN COUNTING")
+		outln(w2, "\nPROVIDER\tTOKEN COUNTING")
 		for _, p := range model.Providers() {
-			fmt.Fprintf(w2, "%s\t%s\n", p.ID, probeCounting(cmd.Context(), p.ID))
+			outf(w2, "%s\t%s\n", p.ID, probeCounting(cmd.Context(), p.ID))
 		}
 		if err := w2.Flush(); err != nil {
 			return err
@@ -75,20 +75,29 @@ var doctorCmd = &cobra.Command{
 			return err
 		}
 		for _, msg := range warnings {
-			fmt.Fprintf(cmd.OutOrStdout(), "WARN: %s\n", msg)
+			outf(cmd.OutOrStdout(), "WARN: %s\n", msg)
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "\nLLM judge: %s\n", judgeStatus())
+		outln(cmd.OutOrStdout(), "\nSANDBOX")
+		for _, line := range sandboxDoctorLines(cmd.Context()) {
+			outf(cmd.OutOrStdout(), "  %s\n", line)
+		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "\nVersion pin: %s\n", versionPinStatus())
+		outln(cmd.OutOrStdout(), "\nAGENT POSTURE (no web tools, remote triggers, MCP servers, connectors or marketplace plugins)")
+		for _, line := range postureDoctorLines(cmd.Context(), harnesses) {
+			outf(cmd.OutOrStdout(), "  %s\n", line)
+		}
 
-		fmt.Fprintln(cmd.OutOrStdout(), "\nCursor model ids are config-driven: run `agent models` for the live list and"+
-			" pin them via providers.cursor.models in the .evolve config file.")
+		outf(cmd.OutOrStdout(), "\nLLM judge: %s\n", judgeStatus())
+
+		outf(cmd.OutOrStdout(), "\nVersion pin: %s\n", versionPinStatus())
 		return nil
 	},
 }
 
 func init() {
+	doctorCmd.Flags().StringVar(&runFlags.BwrapPath, "bwrap-path", "",
+		"bubblewrap executable to check, instead of the one on PATH (operator config: sandbox.bwrap_path)")
 	rootCmd.AddCommand(doctorCmd)
 }
 

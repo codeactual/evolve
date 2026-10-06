@@ -4,14 +4,12 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/grade"
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/grade"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // JudgeSelection resolves the judge-model token (--judge-model / judge_model /
@@ -39,17 +37,23 @@ func (o *Options) JudgeSelection(token string) (harness.Selection, error) {
 	if idx < 0 {
 		return harness.Selection{}, fmt.Errorf("judge model %q: not a known model (see `evolve models`)", token)
 	}
-	m := models[idx]
-
 	available, err := o.AvailableHarnesses()
 	if err != nil {
 		return harness.Selection{}, err
 	}
+	return bindJudgeHarness(models[idx], available)
+}
+
+// bindJudgeHarness binds the judge model m to the first of the available
+// harnesses that supports it and implements harness.EvalRunner. It is split out
+// of JudgeSelection so the no-EvalRunner skip is testable without a real
+// harness that lacks the capability.
+func bindJudgeHarness(m model.Model, available []harness.Harness) (harness.Selection, error) {
 	eligible := map[string]bool{}
 	byID := map[string]harness.Harness{}
 	for _, h := range available {
 		if _, ok := h.(harness.EvalRunner); !ok {
-			continue // e.g. gemini: no headless eval support yet
+			continue // no headless eval support
 		}
 		eligible[h.ID()] = true
 		byID[h.ID()] = h
@@ -57,12 +61,8 @@ func (o *Options) JudgeSelection(token string) (harness.Selection, error) {
 	id, ok := harness.RunnableHarness(m, eligible)
 	if !ok {
 		supported := m.SupportedHarnessIDs()
-		msg := fmt.Sprintf("judge model %s: no installed harness can run judge sessions (supported by: %s)",
+		return harness.Selection{}, fmt.Errorf("judge model %s: no installed harness can run judge sessions (supported by: %s)",
 			m.ID, strings.Join(supported, ", "))
-		if slices.Contains(supported, model.HarnessGemini) {
-			msg += "; gemini has no headless eval support yet"
-		}
-		return harness.Selection{}, errors.New(msg)
 	}
 	return harness.Selection{Model: m, Harness: byID[id]}, nil
 }

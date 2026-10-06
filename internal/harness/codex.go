@@ -7,11 +7,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // Codex drives the `codex` CLI (OpenAI Codex).
@@ -25,7 +27,7 @@ func NewCodex() *Codex {
 		id:        model.HarnessCodex,
 		name:      "OpenAI Codex",
 		clis:      []string{"codex"},
-		envKeys:   []string{"EVOLVE_OPENAI_API_KEY", "OPENAI_API_KEY"},
+		envKeys:   []string{"EVOLVE_OPENAI_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY"},
 		skillDirs: []string{filepath.Join(".agents", "skills")},
 	}}
 }
@@ -37,26 +39,46 @@ func NewCodex() *Codex {
 const codexHomeRel = ".evolve/codex-home"
 
 // codexEnv returns the process env extras for a codex invocation in ws:
-// isolated CODEX_HOME with the operator's auth bridged in.
-func codexEnv(ws string) []string {
+// isolated CODEX_HOME with the operator's auth bridged in, and the operator
+// files the run reads through that home (the bridged auth.json), which a
+// sandboxed run must bind read-only.
+//
+// Only the credential variables the codex CLI itself reads are forwarded from
+// the operator's environment, and only when set; the EVOLVE_-prefixed
+// token-counting keys never reach it. The specs also set Codex's
+// shell_environment_policy.ignore_default_excludes=false so its own shell
+// commands do not inherit those credentials (see codexShellEnvPolicy).
+func codexEnv(ws string) (env, readPaths []string) {
 	home := isolatedDir(ws, codexHomeRel)
-	ensureCodexHome(home)
-	return []string{"CODEX_HOME=" + home}
+	if target := ensureCodexHome(home); target != "" {
+		readPaths = append(readPaths, target)
+	}
+	return append([]string{"CODEX_HOME=" + home}, forwardedEnv(codexCredentialEnv)...), readPaths
 }
 
-// ensureCodexHome creates the isolated home, links the operator's auth.json
-// (write-through so a mid-run token refresh sticks), and carries over the
-// credential-store selection. Best-effort per the isolate.go contract.
-func ensureCodexHome(home string) {
+// codexCredentialEnv are the variables the codex CLI reads to authenticate.
+var codexCredentialEnv = []string{"OPENAI_API_KEY", "CODEX_API_KEY"}
+
+// codexShellEnvPolicy turns Codex's default *KEY*/*SECRET*/*TOKEN* excludes for
+// its shell commands back on: ignore_default_excludes defaults to true, which
+// leaves those commands the agent process's whole environment.
+var codexShellEnvPolicy = []string{"-c", "shell_environment_policy.ignore_default_excludes=false"}
+
+// ensureCodexHome creates the isolated home, links the operator's auth.json,
+// and carries over the credential-store selection. It returns the real path of
+// the linked auth.json ("" when none is linked). Best-effort per the isolate.go
+// contract.
+func ensureCodexHome(home string) string {
 	if err := os.MkdirAll(home, 0o755); err != nil {
-		return
+		return ""
 	}
 	srcHome := operatorDir("CODEX_HOME", ".codex")
 	if srcHome == "" || sameFilePath(srcHome, home) {
-		return
+		return ""
 	}
-	linkFile(filepath.Join(srcHome, "auth.json"), filepath.Join(home, "auth.json"))
+	target := linkFile(filepath.Join(srcHome, "auth.json"), filepath.Join(home, "auth.json"))
 	seedCodexConfig(srcHome, home)
+	return target
 }
 
 // seedCodexConfig writes a minimal config.toml into the isolated home carrying
@@ -83,14 +105,18 @@ func seedCodexConfig(srcHome, home string) {
 	}
 }
 
-func (c *Codex) TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) model.CommandSpec {
-	argv := []string{"codex", "exec", query, "--json", "--skip-git-repo-check", "-m", cliModelID}
-	if hostSandboxed {
-		// codex defaults to a read-only Seatbelt sandbox even for exec; that nests
-		// illegally inside evolve's, so disable it and let evolve confine.
-		argv = append(argv, "--sandbox", "danger-full-access")
+// TriggerSpec builds the headless `codex exec` command for one trigger query.
+// Codex's own sandbox stays on, read-only: a trigger run only reads skills, so
+// workspace-write would grant writes it never needs.
+func (c *Codex) TriggerSpec(ws, query, cliModelID string, _ model.InnerSandbox) model.CommandSpec {
+	argv := []string{
+		"codex", "exec", query, "--json", "--skip-git-repo-check", "-m", cliModelID,
+		"--sandbox", "read-only",
 	}
-	return model.CommandSpec{Argv: argv, Dir: ws, Env: codexEnv(ws)}
+	argv = append(argv, codexShellEnvPolicy...)
+	argv = append(argv, codexLocalOnlyArgs()...)
+	env, readPaths := codexEnv(ws)
+	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
 }
 
 // ScanLine is best-effort: any event-stream line mentioning the skill's
@@ -99,25 +125,81 @@ func (c *Codex) ScanLine(line []byte, skill, _ string) (bool, string) {
 	return strings.Contains(string(line), "skills/"+skill+"/SKILL.md"), ""
 }
 
+// EvalSpec builds the headless `codex exec` command for one behavioral eval.
+// Codex's own sandbox stays on, in workspace-write mode inside evolve's outer
+// sandbox (both use bubblewrap on Linux, so they nest): writes are confined to
+// the workspace, and shell commands get network only when the operator opted in
+// (sandbox.codex_network_access). Codex keeps .git read-only inside the
+// workspace, so a Codex agent cannot commit.
 func (c *Codex) EvalSpec(ws string, in model.EvalInput, cliModelID string) model.CommandSpec {
-	// codex applies its own macOS Seatbelt sandbox for read-only/workspace-write,
-	// which cannot nest inside evolve's. When evolve already confines the run,
-	// switch codex to danger-full-access so evolve's sandbox is the sole layer;
-	// otherwise keep workspace-write as codex's own confinement.
-	sandboxMode := "workspace-write"
-	if in.HostSandboxed {
-		sandboxMode = "danger-full-access"
+	env, readPaths := codexEnv(ws)
+	argv := []string{
+		"codex", "exec", in.Prompt,
+		"--json", "--skip-git-repo-check",
+		"--sandbox", "workspace-write",
+		"-c", "sandbox_workspace_write.network_access=" + strconv.FormatBool(in.InnerSandbox.CodexNetworkAccess),
+		"-c", "shell_environment_policy.ignore_default_excludes=false",
+		"-m", cliModelID,
 	}
+	argv = append(argv, codexLocalOnlyArgs()...)
+	return model.CommandSpec{Argv: argv, Dir: ws, Env: env, ReadPaths: readPaths}
+}
+
+// judgeSchemaFile is the verdict schema's file name inside the judge directory.
+const judgeSchemaFile = "verdicts.schema.json"
+
+// JudgeSpec builds the grading session: its own directory (never the workspace)
+// with a fresh CODEX_HOME under it, Codex's read-only sandbox, --ignore-rules
+// and --ephemeral so no rules file or session state carries over, the shell
+// environment excludes on, and --output-schema so the final message must be the
+// verdicts object. The workspace it grades is visible read-only through evolve's
+// sandbox, and read-only for Codex's own.
+func (c *Codex) JudgeSpec(judgeDir string, in model.JudgeInput, cliModelID string) model.CommandSpec {
+	schemaPath := filepath.Join(judgeDir, judgeSchemaFile)
+	// Best-effort like the rest of the isolation setup: if the write fails the
+	// CLI errors on the missing schema file, which surfaces as a judge error.
+	_ = os.MkdirAll(judgeDir, 0o755)
+	_ = os.WriteFile(schemaPath, []byte(in.Schema), 0o644)
+	env, readPaths := codexEnv(judgeDir)
+	argv := []string{
+		"codex", "exec", in.Prompt, "--json", "--skip-git-repo-check",
+		"--sandbox", "read-only", "--ignore-rules", "--ephemeral",
+		"-m", cliModelID,
+		"--output-schema", schemaPath,
+	}
+	argv = append(argv, codexShellEnvPolicy...)
+	argv = append(argv, codexLocalOnlyArgs()...)
 	return model.CommandSpec{
-		Argv: []string{
-			"codex", "exec", in.Prompt,
-			"--json", "--skip-git-repo-check",
-			"--sandbox", sandboxMode,
-			"-m", cliModelID,
-		},
-		Dir: ws,
-		Env: codexEnv(ws),
+		Argv: argv, Dir: judgeDir, Env: env,
+		ReadPaths: append(readPaths, in.Workspace),
 	}
+}
+
+// ParseJudgeOutput returns the last agent message, which --output-schema
+// constrains to the verdicts object; the strict decode that follows rejects
+// anything else. It never searches earlier messages or prose for JSON.
+func (c *Codex) ParseJudgeOutput(stdout []byte) ([]byte, error) {
+	var last string
+	found := false
+	for line := range strings.SplitSeq(string(stdout), "\n") {
+		var event struct {
+			Type string `json:"type"`
+			Item struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"item"`
+		}
+		if json.Unmarshal([]byte(line), &event) != nil {
+			continue
+		}
+		if event.Type == "item.completed" && event.Item.Type == "agent_message" {
+			last, found = event.Item.Text, true
+		}
+	}
+	if !found {
+		return nil, errors.New("the judge produced no agent message")
+	}
+	return wholeJSONObject(last)
 }
 
 // ParseEvalOutput concatenates agent messages from the codex event stream and
@@ -298,7 +380,7 @@ func (c *Codex) ReportsUsage() bool { return true }
 // RuntimeError detects a codex run that produced no agent output (auth blocked,
 // crash) so it is reported distinctly from a failed eval. A run that emitted any
 // agent_message event is gradable, regardless of exit code.
-func (c *Codex) RuntimeError(stdout []byte, exitCode int, timedOut bool) string {
+func (c *Codex) RuntimeError(stdout []byte, exitCode int, _ bool) string {
 	if len(bytes.TrimSpace(stdout)) == 0 {
 		return "empty CLI output"
 	}

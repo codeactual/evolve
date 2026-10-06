@@ -13,8 +13,8 @@ import (
 
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 // clearOTELEnv blanks every OTEL_* var so env detection cannot drift a test into
@@ -71,7 +71,11 @@ func TestInitFileWinsOverEnv(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	defer shutdown(context.Background())
+	defer func() {
+		if err := shutdown(context.Background()); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	}()
 	if prov.Mode != ModeFile {
 		t.Errorf("mode = %v, want file (the flag wins over OTEL_* env)", prov.Mode)
 	}

@@ -6,7 +6,7 @@ package harness
 import (
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // stubHarness is a minimal harness identified only by id; Select/RunnableHarness
@@ -19,29 +19,38 @@ func (stubHarness) CLI() []string                                  { return []st
 func (stubHarness) EnvKeys() []string                              { return nil }
 func (stubHarness) SkillDirs() []string                            { return nil }
 func (stubHarness) ScanLine([]byte, string, string) (bool, string) { return false, "" }
-func (stubHarness) TriggerSpec(ws, _, _ string, _ bool) model.CommandSpec {
+func (stubHarness) TriggerSpec(ws, _, _ string, _ model.InnerSandbox) model.CommandSpec {
 	return model.CommandSpec{Dir: ws}
 }
 
 func sonnet() model.Model {
 	return model.Model{
 		ID: "anthropic/claude-sonnet-4-6", ProviderID: "anthropic", Name: "Claude Sonnet 4.6",
-		Supported: map[string]string{"claude": "claude-sonnet-4-6", "copilot": "claude-sonnet-4.6"},
+		Supported: map[string]string{"claude": "claude-sonnet-4-6"},
+		Preferred: "claude",
+	}
+}
+
+// dual is a synthetic model both built-in harnesses can drive, preferring Claude.
+func dual() model.Model {
+	return model.Model{
+		ID: "anthropic/dual", ProviderID: "anthropic", Name: "Dual",
+		Supported: map[string]string{"claude": "dual", "codex": "dual"},
 		Preferred: "claude",
 	}
 }
 
 func TestRunnableHarness(t *testing.T) {
-	m := sonnet()
+	m := dual()
 	tests := []struct {
 		name     string
 		eligible map[string]bool
 		want     string
 		ok       bool
 	}{
-		{"preferred wins", map[string]bool{"claude": true, "copilot": true}, "claude", true},
-		{"fallback to other supported", map[string]bool{"copilot": true}, "copilot", true},
-		{"none eligible", map[string]bool{"gemini": true}, "", false},
+		{"preferred wins", map[string]bool{"claude": true, "codex": true}, "claude", true},
+		{"fallback to other supported", map[string]bool{"codex": true}, "codex", true},
+		{"none eligible", map[string]bool{"unknown": true}, "", false},
 		{"empty", map[string]bool{}, "", false},
 	}
 	for _, tt := range tests {
@@ -58,7 +67,7 @@ func TestSelect(t *testing.T) {
 	models := []model.Model{
 		sonnet(),
 		{ID: "openai/gpt-5.4", ProviderID: "openai", Supported: map[string]string{"codex": "gpt-5.4"}, Preferred: "codex"},
-		{ID: "cursor/composer-2.5", ProviderID: "cursor", Supported: map[string]string{"cursor": "composer-2.5"}, Preferred: "cursor"},
+		{ID: "unknown/x", ProviderID: "unknown", Supported: map[string]string{"other": "x"}, Preferred: "other"},
 	}
 	claude := stubHarness{"claude"}
 	codex := stubHarness{"codex"}
@@ -68,9 +77,9 @@ func TestSelect(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// cursor/composer has no eligible harness, so it is skipped.
+		// unknown/x has no eligible harness, so it is skipped.
 		if len(got) != 2 {
-			t.Fatalf("Select(all) = %d, want 2 (cursor dropped, no harness)", len(got))
+			t.Fatalf("Select(all) = %d, want 2 (unknown/x dropped, no harness)", len(got))
 		}
 		if got[0].Key() != "anthropic/claude-sonnet-4-6" || got[0].Harness.ID() != "claude" {
 			t.Errorf("first = %s via %s", got[0].Key(), got[0].Harness.ID())
@@ -98,7 +107,7 @@ func TestSelect(t *testing.T) {
 	})
 
 	t.Run("matched but no eligible harness is dropped not errored", func(t *testing.T) {
-		got, err := Select("anthropic", models, []Harness{codex}) // sonnet needs claude/copilot
+		got, err := Select("anthropic", models, []Harness{codex}) // sonnet needs claude
 		if err != nil {
 			t.Fatal(err)
 		}

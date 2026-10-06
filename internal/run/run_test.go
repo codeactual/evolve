@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/runner"
-	"github.com/bitwise-media-group/evolve/internal/tokencount"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/tokencount"
 )
 
 // TestClearSelectionFlags pins the invariant the TUI relies on: once the form
@@ -68,7 +68,7 @@ func TestCountTokens(t *testing.T) {
 	})
 
 	t.Run("non-counting provider yields nils", func(t *testing.T) {
-		p := &fakeTriggerProvider{} // no TokenCounter capability (cursor-like)
+		p := &fakeTriggerProvider{} // no TokenCounter capability
 		opts := Options{Counter: newCounter(), Jobs: 4}
 		sel := harness.Selection{Model: p.canonicalModel(), Harness: p}
 		for i, c := range opts.countTokens(context.Background(), sel, texts) {

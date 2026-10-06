@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // configModelEntry is the providers.<id>.models[i] shape InjectModels writes —

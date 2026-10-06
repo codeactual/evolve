@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -12,14 +13,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/bitwise-media-group/evolve/internal/cli"
-	"github.com/bitwise-media-group/evolve/internal/grade"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/run"
-	"github.com/bitwise-media-group/evolve/internal/runner"
-	"github.com/bitwise-media-group/evolve/internal/telemetry"
-	"github.com/bitwise-media-group/evolve/internal/tokencount"
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/cli"
+	"github.com/codeactual/evolve/internal/grade"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/telemetry"
+	"github.com/codeactual/evolve/internal/tokencount"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 // RunFlags holds the flags every `run` subcommand inherits from runCmd's
@@ -32,6 +33,9 @@ type RunFlags struct {
 	// an escape hatch for hosts without the sandbox helper (config:
 	// sandbox.enabled=false is the durable equivalent).
 	NoSandbox bool
+	// BwrapPath overrides sandbox.bwrap_path: the bubblewrap to run, instead of
+	// the one on PATH. It must pass the same provenance checks.
+	BwrapPath string
 }
 
 var runFlags = RunFlags{}
@@ -49,7 +53,7 @@ func failOrWarn(cmd *cobra.Command, format string, args ...any) error {
 	if runFlags.Strict {
 		return fmt.Errorf("%s: %w", msg, cli.ErrFailures)
 	}
-	fmt.Fprintf(cmd.ErrOrStderr(), "WARN: %s (pass --strict to exit 1)\n", msg)
+	outf(cmd.ErrOrStderr(), "WARN: %s (pass --strict to exit 1)\n", msg)
 	return nil
 }
 
@@ -81,7 +85,7 @@ func (f *SweepFlags) register(cmd *cobra.Command, defaultTimeout int) {
 		`provider ids / canonical model ids, or "all" (repeatable / comma-separated; alias: --models; `+
 			`filters within config models)`)
 	cmd.Flags().StringSliceVar(&f.Harness, "harness", nil,
-		"only drive models with these harnesses: claude, codex, gemini, cursor, copilot, antigravity, grok "+
+		"only drive models with these harnesses: claude, codex "+
 			"(repeatable / comma-separated; alias: --harnesses; filters within config harnesses)")
 	cmd.Flags().IntVar(&f.Timeout, "timeout", defaultTimeout, "seconds per agent run")
 	cmd.Flags().IntVar(&f.Jobs, "jobs", model.DefaultJobs(), "concurrent agent runs (default: ceil(cpus/2))")
@@ -151,14 +155,14 @@ func (f *SweepFlags) judgeModel(cmd *cobra.Command) string {
 func (f *SweepFlags) resolveJudge(cmd *cobra.Command, common run.Options, warn io.Writer) (grade.Judge, error) {
 	sel, err := opts.JudgeSelection(f.judgeModel(cmd))
 	if err == nil {
-		return run.NewHarnessJudge(sel, common.Runner, common.HostSandboxed)
+		return run.NewHarnessJudge(sel, common.Runner, common.KeepWorkspaces)
 	}
 	explicit := cmd.Flags().Changed("judge-model") ||
 		(opts.Viper != nil && opts.Viper.IsSet("judge_model") && opts.Viper.GetString("judge_model") != "")
 	if explicit {
 		return nil, err
 	}
-	fmt.Fprintf(warn, "WARN: %v; llm assertions will fail\n", err)
+	outf(warn, "WARN: %v; llm assertions will fail\n", err)
 	return run.UnavailableJudge{Reason: err.Error()}, nil
 }
 
@@ -179,6 +183,20 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 	if err != nil {
 		return run.Options{}, err
 	}
+	inner, err := innerSandboxConfig()
+	if err != nil {
+		return run.Options{}, err
+	}
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	exec := &runner.Exec{Sandbox: sandbox, EnvPassthrough: sandboxEnvPassthrough()}
+	if !f.CountOnly { // a count-only run starts no agent
+		if err := preflightSandbox(ctx, sandbox); err != nil {
+			return run.Options{}, err
+		}
+	}
 	// A --harness/--model filter may only narrow the configured restriction; a
 	// value outside it is a hard error, before any work begins.
 	if err := opts.ValidateFilterRestrictions(f.Harness, f.Models); err != nil {
@@ -188,12 +206,17 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 	if err != nil {
 		return run.Options{}, err
 	}
+	if !f.CountOnly {
+		if err := preflightPosture(ctx, exec, selected, inner); err != nil {
+			return run.Options{}, err
+		}
+	}
 	warnings, err := opts.UnsupportedModelWarnings()
 	if err != nil {
 		return run.Options{}, err
 	}
 	for _, w := range warnings {
-		fmt.Fprintf(counterOut, "WARN: %s\n", w)
+		outf(counterOut, "WARN: %s\n", w)
 	}
 	counter, err := opts.Counter(counterOut)
 	if err != nil {
@@ -214,8 +237,8 @@ func (f *SweepFlags) sweepOptionsW(cmd *cobra.Command, counterOut io.Writer) (ru
 		Repo:           repo,
 		Selected:       selected,
 		Counter:        counter,
-		Runner:         &runner.Exec{Sandbox: sandbox},
-		HostSandboxed:  sandbox.Enabled,
+		Runner:         exec,
+		InnerSandbox:   inner,
 		PluginFilter:   f.Plugin,
 		SkillFilter:    f.Skill,
 		Timeout:        time.Duration(f.Timeout) * time.Second,
@@ -264,7 +287,9 @@ func init() {
 	runCmd.PersistentFlags().BoolVar(&runFlags.Strict, "strict", false,
 		"exit 1 when checks or evals fail (default: warn and exit 0)")
 	runCmd.PersistentFlags().BoolVar(&runFlags.NoSandbox, "no-sandbox", false,
-		"disable the OS sandbox that confines agent writes to the workspace (config: sandbox.enabled)")
+		"disable the OS sandbox that confines agents to their workspace (operator config: sandbox.enabled)")
+	runCmd.PersistentFlags().StringVar(&runFlags.BwrapPath, "bwrap-path", "",
+		"bubblewrap executable for the sandbox, instead of the one on PATH (operator config: sandbox.bwrap_path)")
 	runCmd.AddCommand(runAllCmd)
 	rootCmd.AddCommand(runCmd)
 }

@@ -7,7 +7,7 @@ the run is identical either way.
 
 ## Selection form
 
-![The Evolve selection form](assets/form.png){ loading=lazy }
+![The Evolve selection form](assets/form.png)
 
 A set of focusable panes you tab between to choose what runs:
 
@@ -18,22 +18,22 @@ A set of focusable panes you tab between to choose what runs:
 - **Plugins / Skills / Cases** — a tree of every trigger and behavioral case. Each row shows whether it is forced on,
   forced off, or auto-queued for all / some / none of the enabled models; a legend under the tree names every glyph.
 
-| Keys                                         | Action                           |
-| -------------------------------------------- | -------------------------------- |
-| ++tab++ / ++shift+tab++                      | Move left or right between panes |
-| ++1++–++4++                                  | Jump straight to a pane          |
-| ++arrow-up++ ++arrow-down++ / ++j++ ++k++    | Move up or down within a pane    |
-| ++arrow-left++ ++arrow-right++ / ++h++ ++l++ | Collapse or expand the tree      |
-| ++space++                                    | Toggle the selected row          |
-| ++g++ / ++shift+g++                          | Jump to top or bottom            |
-| ++r++                                        | Start the run                    |
-| ++esc++                                      | Quit without running             |
+| Keys                | Action                           |
+| ------------------- | -------------------------------- |
+| `Tab` / `Shift+Tab` | Move left or right between panes |
+| `1`–`4`             | Jump straight to a pane          |
+| `↑` `↓` / `j` `k`   | Move up or down within a pane    |
+| `←` `→` / `h` `l`   | Collapse or expand the tree      |
+| `Space`             | Toggle the selected row          |
+| `g` / `G`           | Jump to top or bottom            |
+| `r`                 | Start the run                    |
+| `Esc`               | Quit without running             |
 
 The form previews exactly what will execute — it and the engine resolve through the same plan, so they cannot drift.
 
 ## Live dashboard
 
-![The Evolve live run dashboard](assets/dashboard.png){ loading=lazy }
+![The Evolve live run dashboard](assets/dashboard.png)
 
 Once a run starts, the dashboard streams progress:
 
@@ -44,11 +44,11 @@ Once a run starts, the dashboard streams progress:
 
 Selecting a run in any pane moves the selection everywhere.
 
-| Keys                    | Action                         |
-| ----------------------- | ------------------------------ |
-| ++f++                   | Follow the live execution      |
-| ++enter++               | Open the selected run's detail |
-| ++g++ / ++shift+g++     | Jump to top or bottom          |
-| ++ctrl+d++ / ++ctrl+u++ | Scroll down or up a page       |
+| Keys                | Action                         |
+| ------------------- | ------------------------------ |
+| `f`                 | Follow the live execution      |
+| `Enter`             | Open the selected run's detail |
+| `g` / `G`           | Jump to top or bottom          |
+| `Ctrl+D` / `Ctrl+U` | Scroll down or up a page       |
 
 See **DESIGN.md → TUI** in the repo for the full wiring.

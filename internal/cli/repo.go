@@ -4,8 +4,8 @@
 package cli
 
 import (
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 // Repo detects the repository the global flags select.
@@ -38,6 +38,9 @@ func (o *Options) ChecksConfig() run.CheckConfig {
 	}
 	if v.IsSet("checks.plugin_manifests") {
 		cfg.PluginManifests = v.GetStringSlice("checks.plugin_manifests")
+	}
+	if v.IsSet("checks.local_only") {
+		cfg.LocalOnly = v.GetBool("checks.local_only")
 	}
 	if v.IsSet("checks.marketplace") {
 		cfg.Marketplace = v.GetBool("checks.marketplace")

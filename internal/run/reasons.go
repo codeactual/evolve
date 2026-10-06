@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 // SelectReason is why a single case (one trigger/eval, for one model) is
@@ -21,6 +21,8 @@ import (
 // ReasonNone.
 type SelectReason int
 
+// The reasons a (case, model) is selected, from none through the aggregate
+// ReasonNoData.
 const (
 	ReasonNone                SelectReason = iota // complete; not selected
 	ReasonNew                                     // no stored result for this model
@@ -164,13 +166,13 @@ func evalCaseReason(r results.EvalResult, ok bool,
 func aggregateReasons(perModel []SelectReason) string {
 	var distinct []SelectReason
 	seen := map[SelectReason]bool{}
-	any, allNew := false, true
+	needed, allNew := false, true
 	for _, r := range perModel {
 		if r == ReasonNone {
 			allNew = false
 			continue
 		}
-		any = true
+		needed = true
 		if r != ReasonNew {
 			allNew = false
 		}
@@ -179,7 +181,7 @@ func aggregateReasons(perModel []SelectReason) string {
 			distinct = append(distinct, r)
 		}
 	}
-	if !any {
+	if !needed {
 		return ""
 	}
 	if allNew {

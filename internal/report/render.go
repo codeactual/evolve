@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 // renderExcluded renders the note listing models the `models` restriction
@@ -42,7 +42,8 @@ func renderExcluded(excluded []excludedProvider) string {
 }
 
 func renderRoot(opts Options, loaded []pluginFiles, summary *Summary, caps capabilityMap,
-	excluded []excludedProvider) string {
+	excluded []excludedProvider,
+) string {
 	var b strings.Builder
 	b.WriteString(generatedMarker + "\n\n# Skill evaluations\n\n" + methodology + "\n")
 	b.WriteString(renderExcluded(excluded))
@@ -565,11 +566,11 @@ func yesNo(v bool) string {
 }
 
 // cell truncates and escapes a value for a Markdown table cell.
-func cell(s string, max int) string {
+func cell(s string, limit int) string {
 	s = strings.ReplaceAll(s, "|", "\\|")
 	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) > max {
-		return s[:max] + "…"
+	if len(s) > limit {
+		return s[:limit] + "…"
 	}
 	return s
 }

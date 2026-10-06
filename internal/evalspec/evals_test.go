@@ -194,11 +194,13 @@ func TestValidateEvalsCatchesProblems(t *testing.T) {
 		{ID: "a", Prompt: "p", Assertions: []Assertion{{Type: "regexp", Pattern: "x"}}},
 		{ID: "a", Prompt: "", Assertions: []Assertion{{Type: "regex", Pattern: "("}}},
 		{Prompt: "p"},
-		{ID: "f", Prompt: "p", Assertions: []Assertion{{Type: "llm", Text: "t"}},
+		{
+			ID: "f", Prompt: "p", Assertions: []Assertion{{Type: "llm", Text: "t"}},
 			Files: []FileRef{
 				{Rel: "files/a.txt", Source: "/no/such/fixture", Dest: "a.txt"},
 				{Rel: "a.txt", Source: "/no/such/either", Dest: "a.txt"},
-			}},
+			},
+		},
 	}
 	problems := strings.Join(ValidateEvals(evals), "\n")
 	for _, want := range []string{

@@ -9,7 +9,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // The right-column "Runs" pane: the execution log list (newest last), windowed

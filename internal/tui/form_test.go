@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 func TestFormRendersAndPreselects(t *testing.T) {

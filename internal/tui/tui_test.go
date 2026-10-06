@@ -9,10 +9,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 type fakeProv struct{}
@@ -23,7 +23,7 @@ func (fakeProv) CLI() []string                                  { return []strin
 func (fakeProv) EnvKeys() []string                              { return []string{"K"} }
 func (fakeProv) SkillDirs() []string                            { return []string{".fake/skills"} }
 func (fakeProv) ScanLine([]byte, string, string) (bool, string) { return false, "" }
-func (fakeProv) TriggerSpec(ws, query, cliModelID string, _ bool) model.CommandSpec {
+func (fakeProv) TriggerSpec(ws, _, _ string, _ model.InnerSandbox) model.CommandSpec {
 	return model.CommandSpec{Argv: []string{"x"}, Dir: ws}
 }
 

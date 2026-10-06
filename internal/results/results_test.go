@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/evalspec"
 )
 
 func sample() *File {
@@ -33,14 +33,16 @@ func sample() *File {
 			Estimate: &Estimate{InputTokens: 1385, InputCostUSD: new(0.01385)},
 			SpecHash: "triggerspechash",
 		}},
-		Summary: TriggerSummary{Passed: &npassed, Total: 1, AvgRunSeconds: &avg,
-			Estimate: &Estimate{InputTokens: 1385, InputCostUSD: new(0.01385)}},
+		Summary: TriggerSummary{
+			Passed: &npassed, Total: 1, AvgRunSeconds: &avg,
+			Estimate: &Estimate{InputTokens: 1385, InputCostUSD: new(0.01385)},
+		},
 	})
-	// A cursor-style entry: no pricing, no estimates.
+	// An entry with no published pricing and no estimates.
 	chits, cruns, cpassed := 2, 3, true
-	f.SetTrigger("cursor/composer-2.5", &TriggerEntry{
+	f.SetTrigger("openai/gpt-5.3-codex-spark", &TriggerEntry{
 		Header: Header{
-			Provider: "cursor", Model: "composer-2.5", Display: "Cursor Composer 2.5",
+			Provider: "openai", Model: "gpt-5.3-codex-spark", Display: "GPT-5.3 Codex Spark",
 			ToolVersion: "0.1.0", RanAt: "2026-06-11T15:11:40Z", Executed: true,
 			RunsPerQuery: 3, TimeoutSeconds: 120, Pricing: nil,
 		},
@@ -79,8 +81,8 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 			if entry.Pricing == nil || *entry.Pricing.InputPerMTok != 10.0 {
 				t.Errorf("pricing = %+v", entry.Pricing)
 			}
-			if loaded.Trigger("cursor/composer-2.5").Pricing != nil {
-				t.Error("cursor pricing must stay nil")
+			if loaded.Trigger("openai/gpt-5.3-codex-spark").Pricing != nil {
+				t.Error("unpriced model pricing must stay nil")
 			}
 		})
 	}
@@ -117,7 +119,7 @@ func TestSaveDirFormatSwitch(t *testing.T) {
 	if entry := again.Trigger("anthropic/claude-fable-5"); entry == nil || *entry.Summary.Passed != 1 {
 		t.Errorf("yaml reload = %+v, want history preserved", entry)
 	}
-	if again.Trigger("cursor/composer-2.5").Pricing != nil {
+	if again.Trigger("openai/gpt-5.3-codex-spark").Pricing != nil {
 		t.Error("explicit-null pricing must survive the yaml round trip")
 	}
 }
@@ -127,16 +129,16 @@ func TestSerializedShape(t *testing.T) {
 	data, _ := os.ReadFile(path)
 	text := string(data)
 
-	// Explicit null pricing for cursor; omitted estimate blocks (no
+	// Explicit null pricing for the unpriced model; omitted estimate blocks (no
 	// "input_tokens": null noise).
 	if !strings.Contains(text, `"pricing": null`) {
-		t.Error("cursor entry must serialize pricing as explicit null")
+		t.Error("unpriced entry must serialize pricing as explicit null")
 	}
 	if strings.Contains(text, `"estimate": null`) || strings.Contains(text, `"measured": null`) {
 		t.Error("absent usage blocks must be omitted, not nulled")
 	}
 	// Model keys are provider-qualified and sorted by encoding/json.
-	if strings.Index(text, "anthropic/claude-fable-5") > strings.Index(text, "cursor/composer-2.5") {
+	if strings.Index(text, "anthropic/claude-fable-5") > strings.Index(text, "openai/gpt-5.3-codex-spark") {
 		t.Error("model keys not sorted")
 	}
 }
@@ -148,11 +150,10 @@ func TestLoadToleratesGarbage(t *testing.T) {
 	}
 
 	bad := t.TempDir()
-	os.WriteFile(filepath.Join(bad, "results.json"), []byte("{corrupt"), 0o644)
+	mustWriteFile(t, filepath.Join(bad, "results.json"), []byte("{corrupt"), 0o644)
 	if f, _, _ := LoadDir(bad, "p", "s"); len(f.Models) != 0 {
 		t.Error("corrupt file must load fresh")
 	}
-
 }
 
 // TestLoadRefusesNewerSchema pins the forward-only guarantee: a file written by
@@ -245,8 +246,10 @@ func TestGradedAssertionFlattens(t *testing.T) {
 	f := &File{Schema: Schema, Plugin: "p", Skill: "s"}
 	exit := 0
 	graded := []GradedAssertion{{
-		Assertion: evalspec.Assertion{Type: "command", Run: "go test ./...", Requires: "go", ExpectExit: &exit,
-			Text: "authored text must not double-emit"},
+		Assertion: evalspec.Assertion{
+			Type: "command", Run: "go test ./...", Requires: "go", ExpectExit: &exit,
+			Text: "authored text must not double-emit",
+		},
 		Text:   "command `go test ./...` exits 0",
 		Passed: nil, Evidence: "skipped: go not installed",
 		Source: "assertion",
@@ -360,5 +363,13 @@ func TestEstimateHelpers(t *testing.T) {
 	}
 	if SumEstimates([]*Estimate{nil, nil}) != nil {
 		t.Error("all-nil must sum to nil")
+	}
+}
+
+// mustWriteFile writes fixture data, failing the test on error.
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatal(err)
 	}
 }

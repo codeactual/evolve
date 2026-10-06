@@ -11,23 +11,25 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
 // fixtureRepo builds a temp single-plugin repo with one skill's results
-// covering the three provider shapes: full anthropic data, a cursor entry
-// (no usage, null pricing), and a count-only google entry.
+// covering the three provider shapes: full anthropic data, an entry from a
+// provider with no counting API and no usage reporting (null pricing; the
+// registry knows no such provider, so every capability is absent), and a
+// count-only openai entry.
 func fixtureRepo(t *testing.T) *layout.Repo {
 	t.Helper()
 	root := t.TempDir()
 	write := func(rel, content string) {
 		t.Helper()
 		path := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		mustMkdirAll(t, filepath.Dir(path), 0o755)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -73,9 +75,9 @@ func fixtureRepo(t *testing.T) *layout.Repo {
 			},
 		},
 	})
-	f.SetTrigger("cursor/composer-2.5", &results.TriggerEntry{
+	f.SetTrigger("fake/no-usage", &results.TriggerEntry{
 		Header: results.Header{
-			Provider: "cursor", Model: "composer-2.5", Display: "Cursor Composer 2.5",
+			Provider: "fake", Model: "no-usage", Display: "Fake No-Usage",
 			ToolVersion: "test", RanAt: "2026-06-11T11:00:00Z", Executed: true,
 			RunsPerQuery: 3, TimeoutSeconds: 120, Pricing: nil,
 		},
@@ -91,26 +93,26 @@ func fixtureRepo(t *testing.T) *layout.Repo {
 		},
 		Summary: results.TriggerSummary{Passed: new(2), Total: 2, AvgRunSeconds: new(12.7)},
 	})
-	f.SetTrigger("google/gemini-3.5-flash", &results.TriggerEntry{
+	f.SetTrigger("openai/gpt-5.4", &results.TriggerEntry{
 		Header: results.Header{
-			Provider: "google", Model: "gemini-3.5-flash", Display: "Gemini 3.5 Flash",
+			Provider: "openai", Model: "gpt-5.4", Display: "GPT-5.4",
 			ToolVersion: "test", RanAt: "2026-06-11T09:00:00Z", Executed: false,
 			TimeoutSeconds: 120,
-			Pricing:        &results.Pricing{InputPerMTok: new(1.5), OutputPerMTok: new(9.0)},
+			Pricing:        &results.Pricing{InputPerMTok: new(2.5), OutputPerMTok: new(15.0)},
 		},
 		Results: []results.TriggerResult{
 			{
 				Query: "Write tests | with pipes", ShouldTrigger: true,
-				Estimate: &results.Estimate{InputTokens: 1290, InputCostUSD: new(0.001935)},
+				Estimate: &results.Estimate{InputTokens: 1290, InputCostUSD: new(0.003225)},
 			},
 			{
 				Query: "Write pytest tests", ShouldTrigger: false,
-				Estimate: &results.Estimate{InputTokens: 1290, InputCostUSD: new(0.001935)},
+				Estimate: &results.Estimate{InputTokens: 1290, InputCostUSD: new(0.003225)},
 			},
 		},
 		Summary: results.TriggerSummary{
 			Total:    2,
-			Estimate: &results.Estimate{InputTokens: 2580, InputCostUSD: new(0.00387)},
+			Estimate: &results.Estimate{InputTokens: 2580, InputCostUSD: new(0.00645)},
 		},
 	})
 	f.SetEval("anthropic/claude-fable-5", &results.EvalEntry{
@@ -144,9 +146,11 @@ func fixtureRepo(t *testing.T) *layout.Repo {
 				Measured:      &results.Measured{InputTokens: new(8000), OutputTokens: new(3000), CostUSD: new(0.75)},
 			},
 			Results: []results.EvalResult{
-				{ID: "basic", Passed: new(true), Summary: &results.GradeSummary{PassRate: new(1.0)},
+				{
+					ID: "basic", Passed: new(true), Summary: &results.GradeSummary{PassRate: new(1.0)},
 					Timing:   &results.Timing{ExecutorDurationSeconds: new(80.0)},
-					Measured: &results.Measured{InputTokens: new(8000), OutputTokens: new(3000), CostUSD: new(0.75)}},
+					Measured: &results.Measured{InputTokens: new(8000), OutputTokens: new(3000), CostUSD: new(0.75)},
+				},
 			},
 		},
 		Baseline: &results.EvalSnapshot{
@@ -156,8 +160,10 @@ func fixtureRepo(t *testing.T) *layout.Repo {
 				AvgRunSeconds: new(40.0),
 			},
 			Results: []results.EvalResult{
-				{ID: "basic", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
-					Timing: &results.Timing{ExecutorDurationSeconds: new(40.0)}, Fingerprint: "fp-basic"},
+				{
+					ID: "basic", Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)},
+					Timing: &results.Timing{ExecutorDurationSeconds: new(40.0)}, Fingerprint: "fp-basic",
+				},
 			},
 		},
 	})
@@ -192,7 +198,7 @@ func TestGenerateGolden(t *testing.T) {
 		}
 		goldenPath := filepath.Join("..", "..", "e2e", "golden", golden)
 		if *update {
-			os.MkdirAll(filepath.Dir(goldenPath), 0o755)
+			mustMkdirAll(t, filepath.Dir(goldenPath), 0o755)
 			if err := os.WriteFile(goldenPath, got, 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -219,7 +225,7 @@ func TestGenerateFiltersToActive(t *testing.T) {
 	repo := fixtureRepo(t)
 	active := map[string]bool{
 		"anthropic/claude-fable-5": true,
-		"cursor/composer-2.5":      true,
+		"fake/no-usage":            true,
 	}
 	if _, err := Generate(Options{
 		Repo: repo, ToolVersion: "test", Models: model.AllModels(nil), ActiveModels: active,
@@ -232,21 +238,77 @@ func TestGenerateFiltersToActive(t *testing.T) {
 	if !strings.Contains(text, "## Excluded models") {
 		t.Fatalf("missing excluded-models note:\n%s", text)
 	}
-	// Google has no active model: listed as all excluded, and its result row is
+	// OpenAI has no active model: listed as all excluded, and its result row is
 	// dropped from the tables entirely.
-	if !strings.Contains(text, "| Google | all models |") {
-		t.Errorf("excluded note missing Google all-models row:\n%s", text)
+	if !strings.Contains(text, "| OpenAI | all models |") {
+		t.Errorf("excluded note missing OpenAI all-models row:\n%s", text)
 	}
-	if strings.Contains(text, "gemini-3.5-flash") {
-		t.Error("filtered google model still present in report")
+	if strings.Contains(text, "gpt-5.4") {
+		t.Error("filtered openai model still present in report")
 	}
 	// Anthropic is partially excluded: its non-active models are listed by id.
 	if !strings.Contains(text, "claude-haiku-4-5") {
 		t.Errorf("excluded note missing partial anthropic ids:\n%s", text)
 	}
 	// Active models survive in the tables.
-	if !strings.Contains(text, "composer-2.5") || !strings.Contains(text, "claude-fable-5") {
+	if !strings.Contains(text, "no-usage") || !strings.Contains(text, "claude-fable-5") {
 		t.Error("active models missing from filtered report")
+	}
+}
+
+// TestGenerateIgnoresRetiredModels pins that committed results still holding an
+// executed, failing row for a model retired from the registry
+// (google/gemini-3.5-flash, once driven by the removed Gemini harness) keep
+// loading and rendering, and that the row stays out of both the report tables
+// and the pass-rate gate when the active set is the registry's own models —
+// exactly how any model outside the active set is treated.
+func TestGenerateIgnoresRetiredModels(t *testing.T) {
+	repo := fixtureRepo(t)
+	dir := filepath.Join(repo.Root, "evals", "solo-skill")
+	f, _, err := results.LoadDir(dir, "solo", "solo-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.SetTrigger("google/gemini-3.5-flash", &results.TriggerEntry{
+		Header: results.Header{
+			Provider: "google", Model: "gemini-3.5-flash", Display: "Gemini 3.5 Flash",
+			ToolVersion: "test", RanAt: "2026-06-11T09:00:00Z", Executed: true,
+			RunsPerQuery: 3, TimeoutSeconds: 120,
+		},
+		Results: []results.TriggerResult{
+			{Query: "Write tests | with pipes", ShouldTrigger: true, Hits: new(0), Runs: new(3), Passed: new(false), AvgRunSeconds: new(4.0)},
+			{Query: "Write pytest tests", ShouldTrigger: false, Hits: new(3), Runs: new(3), Passed: new(false), AvgRunSeconds: new(4.0)},
+		},
+		Summary: results.TriggerSummary{Passed: new(0), Total: 2, AvgRunSeconds: new(4.0)},
+	})
+	if _, err := f.SaveDir(dir, "json"); err != nil {
+		t.Fatal(err)
+	}
+
+	models := model.AllModels(nil)
+	active := map[string]bool{}
+	for _, m := range models {
+		active[m.Key()] = true
+	}
+	summary, err := Generate(Options{Repo: repo, ToolVersion: "test", Models: models, ActiveModels: active})
+	if err != nil {
+		t.Fatalf("Generate over a retired-model row: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(repo.Root, "EVALUATION.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "gemini-3.5-flash") {
+		t.Errorf("retired model still rendered in EVALUATION.md:\n%s", data)
+	}
+	if _, ok := summary.Plugins["solo"].Triggers["google/gemini-3.5-flash"]; ok {
+		t.Error("retired model still in the triggers rollup")
+	}
+	fails, _ := Check(repo, summary, Thresholds{
+		TriggersMinPassRate: 0.8, Maturity: []Maturity{MaturityUnstable},
+	}, active)
+	if len(fails) != 1 || !strings.Contains(fails[0], "anthropic/claude-fable-5") {
+		t.Errorf("fails = %v, want only the active anthropic breach", fails)
 	}
 }
 
@@ -258,15 +320,16 @@ func TestRenderingRules(t *testing.T) {
 	data, _ := os.ReadFile(filepath.Join(repo.Root, "EVALUATION.md"))
 	text := string(data)
 
-	// Rollup row: cursor renders n/a usage cells (capability absent) and its
-	// passed-count; google is count-only (— executed cells, grouped tokens).
-	cursorRollup := lineContaining(t, text, "`composer-2.5`")
-	if !strings.Contains(cursorRollup, "| n/a | n/a |") || !strings.Contains(cursorRollup, "| 2/2 |") {
-		t.Errorf("cursor rollup row = %q", cursorRollup)
+	// Rollup row: the no-usage provider renders n/a usage cells (capability
+	// absent) and its passed-count; openai is count-only (— executed cells,
+	// grouped tokens).
+	noUsageRollup := lineContaining(t, text, "`no-usage`")
+	if !strings.Contains(noUsageRollup, "| n/a | n/a |") || !strings.Contains(noUsageRollup, "| 2/2 |") {
+		t.Errorf("no-usage rollup row = %q", noUsageRollup)
 	}
-	googleRollup := lineContaining(t, text, "`gemini-3.5-flash`")
-	if !strings.Contains(googleRollup, "| — | — | — |") || !strings.Contains(googleRollup, "2,580") {
-		t.Errorf("google rollup row = %q", googleRollup)
+	openaiRollup := lineContaining(t, text, "`gpt-5.4`")
+	if !strings.Contains(openaiRollup, "| — | — | — |") || !strings.Contains(openaiRollup, "2,580") {
+		t.Errorf("openai rollup row = %q", openaiRollup)
 	}
 
 	// Per-case detail: one heading per trigger, with a model-per-row table. The
@@ -274,15 +337,15 @@ func TestRenderingRules(t *testing.T) {
 	if !strings.Contains(text, "#### Write tests | with pipes (expected: yes)") {
 		t.Error("trigger query heading missing or pipe-escaped")
 	}
-	// A per-case cursor trigger row shows the verdict + hits/runs and n/a usage cells.
-	cursorCase := lineWith(t, text, "composer-2.5", "PASS")
-	if !strings.Contains(cursorCase, "| 2/3 |") || !strings.Contains(cursorCase, "| n/a | n/a |") {
-		t.Errorf("cursor per-case row = %q", cursorCase)
+	// A per-case no-usage trigger row shows the verdict + hits/runs and n/a usage cells.
+	noUsageCase := lineWith(t, text, "no-usage", "PASS")
+	if !strings.Contains(noUsageCase, "| 2/3 |") || !strings.Contains(noUsageCase, "| n/a | n/a |") {
+		t.Errorf("no-usage per-case row = %q", noUsageCase)
 	}
-	// A per-case google trigger row is count-only with grouped token counts.
-	googleCase := lineWith(t, text, "gemini-3.5-flash", "1,290")
-	if !strings.Contains(googleCase, "| — | — | — | — |") {
-		t.Errorf("google per-case row = %q", googleCase)
+	// A per-case openai trigger row is count-only with grouped token counts.
+	openaiCase := lineWith(t, text, "gpt-5.4", "1,290")
+	if !strings.Contains(openaiCase, "| — | — | — | — |") {
+		t.Errorf("openai per-case row = %q", openaiCase)
 	}
 	// Failed assertions surface with evidence, now keyed by model.
 	if !strings.Contains(text, "`claude-fable-5` failed `file x exists`: x missing") {
@@ -359,7 +422,7 @@ func TestCheckThresholds(t *testing.T) {
 	// aggregate did, keeping this test's assertions about breach content unchanged.
 	gate := []Maturity{MaturityUnstable}
 
-	// anthropic triggers 1/2 = 50%, cursor 2/2 = 100%.
+	// anthropic triggers 1/2 = 50%, no-usage 2/2 = 100%.
 	fails, warns := Check(repo, summary, Thresholds{TriggersMinPassRate: 0.8, Maturity: gate}, nil)
 	if len(fails) != 1 || !strings.Contains(fails[0], "anthropic/claude-fable-5") {
 		t.Errorf("fails = %v, want one for anthropic", fails)
@@ -743,7 +806,7 @@ func multiSkillRepo(t *testing.T) *layout.Repo {
 	write := func(rel, content string) {
 		t.Helper()
 		path := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		mustMkdirAll(t, filepath.Dir(path), 0o755)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -894,5 +957,13 @@ func TestGenerateRefusesNewerResults(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(repo.Root, "EVALUATION.md")); !os.IsNotExist(statErr) {
 		t.Error("EVALUATION.md must not be written when a results file is newer")
+	}
+}
+
+// mustMkdirAll creates a fixture directory tree, failing the test on error.
+func mustMkdirAll(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // Selection is one (model, harness) pair a sweep runs. Exactly one harness per

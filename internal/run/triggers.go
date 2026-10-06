@@ -13,13 +13,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/internal/runner"
-	"github.com/bitwise-media-group/evolve/internal/workspace"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/workspace"
 )
 
 // TriggerOptions configures a trigger sweep.
@@ -131,7 +131,6 @@ func runTriggerSet(ctx context.Context, opts TriggerOptions, set layout.EvalSet)
 func runTriggerUnit(ctx context.Context, opts TriggerOptions, set layout.EvalSet, sel harness.Selection,
 	file *results.File, skillMD []byte, contentHash string, triggers []evalspec.Trigger, allowedModels []string, ws string,
 ) (failed bool, err error) {
-
 	rep := opts.reporter()
 	// modelApplicable is every query valid for this model (the eval-set models
 	// restriction + skill only), ignoring the selection filter, so a partial rerun
@@ -229,13 +228,14 @@ func runTriggerUnit(ctx context.Context, opts TriggerOptions, set layout.EvalSet
 // fills hits/runs/passed/avg into entryResults as queries complete. Sharing
 // the workspace is safe: trigger sessions are read-only.
 func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection, cli, ws string, ref plan.UnitRef,
-	triggers []evalspec.Trigger, entryResults []results.TriggerResult) (bool, error) {
-
+	triggers []evalspec.Trigger, entryResults []results.TriggerResult,
+) (bool, error) {
 	rep := opts.reporter()
 	skill := ref.Skill
 	type outcome struct {
 		index   int
 		hit     bool
+		errored bool
 		seconds float64
 	}
 	outcomes := make(chan outcome)
@@ -243,6 +243,7 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 	collectorDone := make(chan bool)
 	go func() {
 		hits := make([]int, len(triggers))
+		errs := make([]int, len(triggers))
 		elapsed := make([]float64, len(triggers))
 		remaining := make([]int, len(triggers))
 		for i := range remaining {
@@ -252,6 +253,9 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 		for o := range outcomes {
 			if o.hit {
 				hits[o.index]++
+			}
+			if o.errored {
+				errs[o.index]++
 			}
 			elapsed[o.index] += o.seconds
 			remaining[o.index]--
@@ -265,6 +269,11 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 			passed := rate < 0.5
 			if expected {
 				passed = rate >= 0.5
+			}
+			// A run that errored never saw the query, so it is no evidence for
+			// either outcome: a query with any such run cannot pass.
+			if errs[i] > 0 {
+				passed = false
 			}
 			failed = failed || !passed
 			h, r := hits[i], opts.Runs
@@ -280,12 +289,16 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 			if expected {
 				expect = "yes"
 			}
+			detail := fmt.Sprintf("rate=%.2f avg=%.1fs expect=%s %s",
+				rate, avg, expect, truncate(triggers[i].Query, 70))
+			if errs[i] > 0 {
+				detail = fmt.Sprintf("errored=%d/%d %s", errs[i], opts.Runs, detail)
+			}
 			rep.ItemDone(ref, ItemResult{
 				Index:  i,
 				Label:  triggers[i].Query,
 				Status: status,
-				Detail: fmt.Sprintf("rate=%.2f avg=%.1fs expect=%s %s",
-					rate, avg, expect, truncate(triggers[i].Query, 70)),
+				Detail: detail,
 				Metrics: plan.ItemMetrics{
 					Hits: &h, Runs: &r, AvgRunSeconds: &avg,
 					InputTokens: estTokens(entryResults[i].Estimate),
@@ -306,16 +319,8 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 		for range opts.Runs {
 			g.Go(func() error {
 				cliModelID, _ := sel.Model.CLIModelID(sel.Harness.ID())
-				spec := sel.Harness.TriggerSpec(ws, t.Query, cliModelID, opts.HostSandboxed)
+				spec := sel.Harness.TriggerSpec(ws, t.Query, cliModelID, opts.InnerSandbox)
 				spec.Argv[0] = cli
-				// Optional side channel (Grok PreToolUse hit file): cancel as soon
-				// as the skill is invoked, without waiting for streaming-json end.
-				var sideHit func() bool
-				if sc, ok := sel.Harness.(harness.TriggerSideChannel); ok {
-					var env []string
-					sideHit, env = sc.ArmTriggerHit(ws, skill)
-					spec.Env = append(spec.Env, env...)
-				}
 				scan := &runner.Scan{
 					OnLine: func(line []byte) bool {
 						hit, note := sel.Harness.ScanLine(line, skill, ws)
@@ -324,24 +329,25 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 						}
 						return hit
 					},
-					SideHit: sideHit,
 				}
 				res, err := opts.Runner.Run(runCtx, spec, opts.Timeout, scan)
 				if err != nil {
 					return err
 				}
-				// Race fallback: process died before the poller saw the marker.
-				if !res.Hit && sideHit != nil && sideHit() {
-					res.Hit = true
+				detail := ""
+				if res.StderrTail != "" {
+					detail = "; stderr tail: " + tail(res.StderrTail, 300)
 				}
 				if res.TimedOut {
-					detail := ""
-					if res.StderrTail != "" {
-						detail = "; stderr tail: " + tail(res.StderrTail, 300)
-					}
 					rep.Warn("  warn: runner timed out; counted as no-trigger%s\n", detail)
 				}
-				outcomes <- outcome{index: i, hit: res.Hit, seconds: res.Elapsed.Seconds()}
+				// The runner kills the agent on a hit, so a non-zero exit status
+				// only signals failure when no activation was seen.
+				errored := !res.Hit && !res.TimedOut && res.ExitCode != 0
+				if errored {
+					rep.Warn("  warn: agent run errored (exit %d); not counted as a no-trigger%s\n", res.ExitCode, detail)
+				}
+				outcomes <- outcome{index: i, hit: res.Hit, errored: errored, seconds: res.Elapsed.Seconds()}
 				return nil
 			})
 		}
@@ -353,7 +359,8 @@ func runQueries(ctx context.Context, opts TriggerOptions, sel harness.Selection,
 }
 
 func buildTriggerEntry(opts TriggerOptions, sel harness.Selection, executed bool,
-	contentHash string, entryResults []results.TriggerResult, old *results.TriggerEntry) *results.TriggerEntry {
+	contentHash string, entryResults []results.TriggerResult, old *results.TriggerEntry,
+) *results.TriggerEntry {
 	header := opts.header(sel, executed)
 	header.ContentHash = contentHash
 	entry := &results.TriggerEntry{
@@ -411,8 +418,8 @@ func buildTriggerEntry(opts TriggerOptions, sel harness.Selection, executed bool
 // preserves queries the rerun did not touch, updates the ones it did, and prunes
 // queries removed from the spec (absent from modelApplicable).
 func mergeTriggerResults(existing *results.TriggerEntry, fresh []results.TriggerResult,
-	modelApplicable []evalspec.Trigger) []results.TriggerResult {
-
+	modelApplicable []evalspec.Trigger,
+) []results.TriggerResult {
 	freshByQuery := make(map[string]results.TriggerResult, len(fresh))
 	for _, r := range fresh {
 		freshByQuery[r.Query] = r

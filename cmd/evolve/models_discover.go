@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -15,9 +14,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/bitwise-media-group/evolve/internal/cli"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/tui"
+	"github.com/codeactual/evolve/internal/cli"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/tui"
 )
 
 var modelsDiscoverFlags struct {
@@ -81,12 +80,12 @@ edited by hand; their costs render as unpublished in reports.`,
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "added %d model(s) to %s:\n", len(added), path)
+		outf(cmd.OutOrStdout(), "added %d model(s) to %s:\n", len(added), path)
 		for _, id := range added {
-			fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", id)
+			outf(cmd.OutOrStdout(), "  %s\n", id)
 		}
 		if restrict := opts.Viper.GetStringSlice("models"); len(restrict) > 0 {
-			fmt.Fprintf(cmd.ErrOrStderr(),
+			outf(cmd.ErrOrStderr(),
 				"note: this repo restricts runs via the `models` config (%s); extend it if the new models should run\n",
 				strings.Join(restrict, ", "))
 		}
@@ -114,7 +113,7 @@ func discoverModels(cmd *cobra.Command) ([]tui.DiscoverItem, error) {
 		return nil, err
 	}
 	source := func(providerID, bareID string) string {
-		if _, ok := model.ModelByID(avail, providerID+"/"+bareID); !ok {
+		if _, ok := model.ByID(avail, providerID+"/"+bareID); !ok {
 			return ""
 		}
 		if overridden[providerID] {
@@ -139,7 +138,7 @@ func discoverModels(cmd *cobra.Command) ([]tui.DiscoverItem, error) {
 		g.Go(func() error {
 			ms, err := lister.ListModels(ctx)
 			if errors.Is(err, model.ErrNoCredential) {
-				fmt.Fprintf(cmd.ErrOrStderr(), "skipping %s: %v (set %s)\n",
+				outf(cmd.ErrOrStderr(), "skipping %s: %v (set %s)\n",
 					p.Name, err, strings.Join(model.CounterEnvKeys(p.ID), " or "))
 				return nil
 			}
@@ -173,18 +172,18 @@ func discoverModels(cmd *cobra.Command) ([]tui.DiscoverItem, error) {
 // picker, as a table.
 func printDiscovered(cmd *cobra.Command, items []tui.DiscoverItem) error {
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "MODEL\tNAME\tSTATUS")
+	outln(w, "MODEL\tNAME\tSTATUS")
 	for _, it := range items {
 		status := "new"
 		if it.Source != "" {
 			status = "already in " + it.Source
 		}
-		fmt.Fprintf(w, "%s/%s\t%s\t%s\n", it.ProviderID, it.ID, it.Name, status)
+		outf(w, "%s/%s\t%s\t%s\n", it.ProviderID, it.ID, it.Name, status)
 	}
 	if err := w.Flush(); err != nil {
 		return err
 	}
-	fmt.Fprintln(cmd.ErrOrStderr(),
+	outln(cmd.ErrOrStderr(),
 		"run interactively (a terminal, without --no-tui) to pick models and add them to the .evolve config")
 	return nil
 }

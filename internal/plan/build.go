@@ -4,8 +4,8 @@
 package plan
 
 import (
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/harness"
 )
 
 // Build resolves a Selection into the ordered Plan the sweep will execute. The

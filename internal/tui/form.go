@@ -10,9 +10,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/bitwise-media-group/evolve/internal/evalspec"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/evalspec"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // formAction is what a key press resolved to on the selection screen.
@@ -635,7 +635,8 @@ func (f formModel) buttons() string {
 func (f formModel) hint() string {
 	return footerHint.Render(clip(
 		"[tab] pane · [↑↓]/[jk] move · [←→]/[hl] fold · [space] toggle · [g]/[G] ends · [r] run · [esc] cancel",
-		max(f.w, 1)))
+		max(f.w, 1),
+	))
 }
 
 func (f formModel) modelCount() string {

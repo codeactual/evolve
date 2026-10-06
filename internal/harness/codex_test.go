@@ -4,8 +4,13 @@
 package harness
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // codexStream is a real `codex exec --json` capture (aggregated_output trimmed):
@@ -97,5 +102,130 @@ func TestCodexRuntimeError(t *testing.T) {
 		if got := c.RuntimeError([]byte(tt.stdout), tt.exitCode, false); got != tt.want {
 			t.Errorf("%s: RuntimeError = %q, want %q", tt.name, got, tt.want)
 		}
+	}
+}
+
+func TestCodexTriggerSpecReadOnly(t *testing.T) {
+	spec := NewCodex().TriggerSpec(t.TempDir(), "q", "gpt-5.5", model.InnerSandbox{})
+	if !containsPair(spec.Argv, "--sandbox", "read-only") {
+		t.Errorf("trigger argv lacks --sandbox read-only: %v", spec.Argv)
+	}
+}
+
+func TestCodexEvalSpecNetworkOffByDefault(t *testing.T) {
+	spec := NewCodex().EvalSpec(t.TempDir(), model.EvalInput{Prompt: "p"}, "gpt-5.5")
+	if !containsPair(spec.Argv, "--sandbox", "workspace-write") {
+		t.Errorf("eval argv lacks --sandbox workspace-write: %v", spec.Argv)
+	}
+	if !containsPair(spec.Argv, "-c", "sandbox_workspace_write.network_access=false") {
+		t.Errorf("eval argv lacks network_access=false by default: %v", spec.Argv)
+	}
+}
+
+func TestCodexEvalSpecNetworkAccessOptIn(t *testing.T) {
+	in := model.EvalInput{Prompt: "p", InnerSandbox: model.InnerSandbox{CodexNetworkAccess: true}}
+	spec := NewCodex().EvalSpec(t.TempDir(), in, "gpt-5.5")
+	if !containsPair(spec.Argv, "-c", "sandbox_workspace_write.network_access=true") {
+		t.Errorf("eval argv lacks network_access=true after the opt-in: %v", spec.Argv)
+	}
+}
+
+// TestCodexEnvCredentials pins that only the credential variables the codex CLI
+// reads are forwarded, and only when set in the parent.
+func TestCodexEnvCredentials(t *testing.T) {
+	for _, k := range []string{"OPENAI_API_KEY", "CODEX_API_KEY", "EVOLVE_OPENAI_API_KEY", "GITHUB_TOKEN"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("CODEX_HOME", t.TempDir())
+	env, _ := codexEnv(t.TempDir())
+	for _, e := range env {
+		for _, unwanted := range []string{"OPENAI_API_KEY=", "CODEX_API_KEY=", "GITHUB_TOKEN=", "EVOLVE_"} {
+			if strings.HasPrefix(e, unwanted) {
+				t.Errorf("unset credential leaked into env as %q", e)
+			}
+		}
+	}
+
+	t.Setenv("OPENAI_API_KEY", "sk-test")
+	t.Setenv("CODEX_API_KEY", "codex-test")
+	t.Setenv("EVOLVE_OPENAI_API_KEY", "counting-only")
+	t.Setenv("GITHUB_TOKEN", "ghp_unrelated")
+	env, _ = codexEnv(t.TempDir())
+	for _, want := range []string{"OPENAI_API_KEY=sk-test", "CODEX_API_KEY=codex-test"} {
+		if !slices.Contains(env, want) {
+			t.Errorf("env lacks %q: %v", want, env)
+		}
+	}
+	for _, e := range env {
+		if strings.HasPrefix(e, "EVOLVE_") || strings.HasPrefix(e, "GITHUB_TOKEN=") {
+			t.Errorf("env forwards %q, which the codex CLI does not read", e)
+		}
+	}
+	if !slices.Contains(NewCodex().EnvKeys(), "CODEX_API_KEY") {
+		t.Errorf("EnvKeys = %v, want CODEX_API_KEY among the credential variables", NewCodex().EnvKeys())
+	}
+}
+
+// TestCodexSpecsEnableDefaultExcludes pins that both specs turn Codex's own
+// *KEY*/*SECRET*/*TOKEN* shell-environment excludes back on: Codex defaults
+// ignore_default_excludes to true, which leaves its shell commands the agent
+// process's whole environment, credentials included.
+func TestCodexSpecsEnableDefaultExcludes(t *testing.T) {
+	const flag = "shell_environment_policy.ignore_default_excludes=false"
+	trigger := NewCodex().TriggerSpec(t.TempDir(), "q", "gpt-5.5", model.InnerSandbox{})
+	eval := NewCodex().EvalSpec(t.TempDir(), model.EvalInput{Prompt: "p"}, "gpt-5.5")
+	for name, argv := range map[string][]string{"trigger": trigger.Argv, "eval": eval.Argv} {
+		if !containsPair(argv, "-c", flag) {
+			t.Errorf("%s argv lacks -c %s: %v", name, flag, argv)
+		}
+	}
+}
+
+func TestCodexJudgeSpec(t *testing.T) {
+	judgeDir, ws := t.TempDir(), t.TempDir()
+	t.Setenv("CODEX_HOME", t.TempDir())
+	schema := `{"type":"object","additionalProperties":false}`
+	spec := NewCodex().JudgeSpec(judgeDir, model.JudgeInput{
+		Prompt: "grade it", MaxTurns: 16, Workspace: ws, Schema: schema,
+	}, "gpt-5.5")
+
+	schemaPath := filepath.Join(judgeDir, "verdicts.schema.json")
+	want := []string{
+		"codex", "exec", "grade it", "--json", "--skip-git-repo-check",
+		"--sandbox", "read-only", "--ignore-rules", "--ephemeral",
+		"-m", "gpt-5.5",
+		"--output-schema", schemaPath,
+		"-c", "shell_environment_policy.ignore_default_excludes=false",
+	}
+	want = append(want, codexLocalOnlyArgs()...)
+	if !slices.Equal(spec.Argv, want) {
+		t.Errorf("judge argv =\n%v\nwant\n%v", spec.Argv, want)
+	}
+	if spec.Dir != judgeDir {
+		t.Errorf("Dir = %q, want the judge directory %q, never the workspace", spec.Dir, judgeDir)
+	}
+	if !slices.Contains(spec.ReadPaths, ws) {
+		t.Errorf("ReadPaths = %v, want the workspace (read-only view)", spec.ReadPaths)
+	}
+	if got, err := os.ReadFile(schemaPath); err != nil || string(got) != schema {
+		t.Errorf("schema file = %q, %v; want the grade schema bytes", got, err)
+	}
+	if !slices.Contains(spec.Env, "CODEX_HOME="+isolatedDir(judgeDir, codexHomeRel)) {
+		t.Errorf("CODEX_HOME must live under the judge directory: %v", spec.Env)
+	}
+}
+
+func TestCodexParseJudgeOutput(t *testing.T) {
+	const payload = `{"verdicts":[{"id":1,"passed":true,"evidence":"e"}]}`
+	stream := `{"type":"thread.started","thread_id":"t"}
+{"type":"item.completed","item":{"id":"i0","type":"agent_message","text":"Let me look at the files."}}
+{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":` + "\"" + strings.ReplaceAll(payload, `"`, `\"`) + "\"" + `}}
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}`
+	got, err := NewCodex().ParseJudgeOutput([]byte(stream))
+	if err != nil || string(got) != payload {
+		t.Errorf("ParseJudgeOutput = %q, %v; want the last agent message %s", got, err, payload)
+	}
+	if _, err := NewCodex().ParseJudgeOutput([]byte(`{"type":"turn.started"}`)); err == nil {
+		t.Error("a stream with no agent message must be an error")
 	}
 }

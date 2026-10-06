@@ -21,11 +21,11 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // scopeName is this package's OpenTelemetry instrumentation scope.
-const scopeName = "github.com/bitwise-media-group/evolve/internal/tokencount"
+const scopeName = "github.com/codeactual/evolve/internal/tokencount"
 
 func tracer() trace.Tracer { return otel.Tracer(scopeName) }
 
@@ -73,7 +73,7 @@ func New(path string, stderr io.Writer) *Counter {
 // the counting API expects.
 func (c *Counter) Count(ctx context.Context, tc model.TokenCounter, providerID, modelID, text string) *int {
 	if tc == nil {
-		return nil // capability absent (e.g. cursor) — expected, no warning
+		return nil // capability absent (vendor has no counting API) — expected, no warning
 	}
 
 	ctx, span := tracer().Start(ctx, "evolve.tokencount", trace.WithAttributes(
@@ -130,7 +130,8 @@ func (c *Counter) warn(scope, message string) {
 	defer c.mu.Unlock()
 	if !c.warned[scope] {
 		c.warned[scope] = true
-		fmt.Fprintf(c.stderr, "  warn: [%s] %s\n", scope, message)
+		// A failed warning write is not actionable; counting carries on without it.
+		_, _ = fmt.Fprintf(c.stderr, "  warn: [%s] %s\n", scope, message)
 	}
 }
 

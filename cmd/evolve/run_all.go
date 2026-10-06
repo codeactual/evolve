@@ -4,14 +4,12 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/run"
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 // allFlags is flag storage only: `run all` never reads it. Values reach the
@@ -26,27 +24,6 @@ var runAllCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if err := opts.CheckVersionPin(version.Version, cmd.ErrOrStderr()); err != nil {
 			return err
-		}
-		if isRemote, err := remoteMode(cmd); err != nil {
-			return err
-		} else if isRemote {
-			// The checks tier is static analysis of the local tree — always
-			// local; the agent tiers execute remotely.
-			var failures bool
-			if err := runSub(cmd, checksCmd, &failures); err != nil {
-				return err
-			}
-			if err := runRemote(cmd, &allFlags.SweepFlags, plan.Tiers{Triggers: true, Evals: true},
-				allFlags.Runs, "", "run: some checks or cases failed"); err != nil {
-				return err
-			}
-			if err := runSub(cmd, reportCmd, &failures); err != nil {
-				return err
-			}
-			if failures {
-				return failOrWarn(cmd, "run: some checks or cases failed")
-			}
-			return nil
 		}
 		interactive := interactiveTUI(cmd, allFlags.NoTUI)
 		if err := reconcileStaleResults(cmd, interactive); err != nil {
@@ -74,7 +51,7 @@ var runAllCmd = &cobra.Command{
 			return err
 		}
 		if !allFlags.CountOnly {
-			fmt.Fprintf(cmd.OutOrStdout(), "parallelism: %d concurrent agent runs\n", allFlags.Jobs)
+			outf(cmd.OutOrStdout(), "parallelism: %d concurrent agent runs\n", allFlags.Jobs)
 		}
 		triggerTO, evalTO := perTierTimeouts(cmd, allFlags.Timeout)
 		failed, runErr := run.Sweep(cmd.Context(), run.SweepOptions{

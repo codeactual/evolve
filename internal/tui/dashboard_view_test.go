@@ -10,8 +10,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/plan"
 )
 
 // TestDashboardLegendResponsive pins the greedy packing: one row when every

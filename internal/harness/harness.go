@@ -8,7 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 // Harness is the required surface every agent CLI implements. A harness drives
@@ -23,42 +23,38 @@ type Harness interface {
 	SkillDirs() []string
 	// TriggerSpec builds the headless command for one trigger query. cliModelID
 	// is the harness-specific model id (already mapped from the canonical model).
-	// hostSandboxed: when set, the harness must disable the agent CLI's own OS
-	// sandbox so it does not nest illegally inside evolve's.
-	TriggerSpec(ws, query, cliModelID string, hostSandboxed bool) model.CommandSpec
+	// inner configures the agent CLI's own sandbox, which is always on: layered
+	// inside evolve's outer sandbox.
+	TriggerSpec(ws, query, cliModelID string, inner model.InnerSandbox) model.CommandSpec
 	// ScanLine inspects one stdout line for activation of skill. workDir is the
 	// agent command's working directory (CommandSpec.Dir); harnesses that keep
-	// side state under the workspace (e.g. Grok's isolated GROK_HOME) use it,
-	// others ignore it. A non-empty note surfaces a harness-reported run error
-	// as a warning.
+	// side state under the workspace use it, others ignore it. A non-empty note
+	// surfaces a harness-reported run error as a warning.
 	ScanLine(line []byte, skill, workDir string) (hit bool, note string)
-}
-
-// TriggerSideChannel is an optional capability for harnesses that can signal
-// skill activation outside stdout (e.g. Grok's PreToolUse hook writing a hit
-// file). The trigger engine type-asserts and arms SideHit on runner.Scan so the
-// agent process can be cancelled as soon as the skill is invoked.
-type TriggerSideChannel interface {
-	// ArmTriggerHit prepares a per-invocation side channel for skill under ws.
-	// env is appended to CommandSpec.Env (inherited by hook children); sideHit
-	// is polled by the runner and should become true once activation is known.
-	ArmTriggerHit(ws, skill string) (sideHit func() bool, env []string)
 }
 
 // EvalRunner is the optional capability of running behavioral evals. Harnesses
 // implement it only when their CLI supports a gradable headless run; engines
-// type-assert and degrade for those that do not (Gemini). The LLM judge reuses
-// EvalSpec at the judge turn ceiling (model.DefaultJudgeMaxTurns): its
-// confinement is evolve's OS sandbox (or the harness's own eval sandbox when
-// not host-sandboxed), never a judge-specific tool allowlist.
+// type-assert and degrade for those that do not. The LLM judge runs through
+// JudgeSpec: a session in its own directory with a fresh CLI config home, a
+// read-only view of the workspace it grades, code-running tools, hooks, MCP and
+// project settings disabled, and schema-constrained structured output.
 type EvalRunner interface {
 	EvalSpec(ws string, c model.EvalInput, cliModelID string) model.CommandSpec
+	// JudgeSpec builds the LLM-judge session for in: it runs in judgeDir (never
+	// the workspace), may read in.Workspace but not write it, and must report its
+	// verdicts as structured output matching in.Schema.
+	JudgeSpec(judgeDir string, in model.JudgeInput, cliModelID string) model.CommandSpec
+	// ParseJudgeOutput extracts the structured verdicts payload from a judge
+	// session's full stdout. It never scans prose for JSON: the payload is the
+	// structured-output field, or a final message that is itself the whole
+	// object.
+	ParseJudgeOutput(stdout []byte) ([]byte, error)
 	// ParseEvalOutput extracts the final assistant text and measured usage from
 	// the CLI's full stdout. usage is nil where unsupported.
 	ParseEvalOutput(stdout []byte) (finalText string, usage *model.Usage)
 	// ReportsUsage reports whether live sessions ever yield measured usage;
-	// false (cursor/copilot/antigravity) exempts the measured fields from --new
-	// completeness.
+	// false exempts the measured fields from --new completeness.
 	ReportsUsage() bool
 	// RuntimeError returns a short reason when the agent run produced no usable
 	// output (auth blocked, crash, empty/error envelope), or "" when the output
@@ -69,10 +65,9 @@ type EvalRunner interface {
 
 // ToolCallReporter is the optional capability of extracting the tool calls an
 // agent made from the CLI's structured run output. Harnesses implement it only
-// when their output carries tool invocations (Claude, Codex); envelope/text
-// harnesses (Cursor, Copilot, Antigravity) cannot, so a tool_call assertion
-// against them is skipped. Gemini will gain it for free once its EvalRunner
-// lands — its ScanLine already parses the tool name and parameters.
+// when their output carries tool invocations (Claude and Codex both do); a
+// harness whose output is an envelope or plain text cannot, so a tool_call
+// assertion against it is skipped.
 type ToolCallReporter interface {
 	// ParseToolCalls returns every tool invocation in the CLI's full stdout, in
 	// the order observed. A non-nil empty slice means the run reported zero
@@ -132,18 +127,11 @@ func OffersModel(m model.Model, hid string, tokens []string) bool {
 // harnessOrder is the deterministic preference order used to pick a harness for
 // a model when several eligible harnesses support it and the model's preferred
 // harness is not eligible.
-var harnessOrder = []string{
-	model.HarnessClaude, model.HarnessCodex, model.HarnessGemini,
-	model.HarnessCursor, model.HarnessCopilot, model.HarnessAntigravity,
-	model.HarnessGrok,
-}
+var harnessOrder = []string{model.HarnessClaude, model.HarnessCodex}
 
 // All returns the builtin harness set, in harnessOrder.
 func All() []Harness {
-	return []Harness{
-		NewClaude(), NewCodex(), NewGemini(), NewCursor(), NewCopilot(), NewAntigravity(),
-		NewGrok(),
-	}
+	return []Harness{NewClaude(), NewCodex()}
 }
 
 // ByID returns the builtin harness with the given id, if any.

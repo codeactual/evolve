@@ -8,12 +8,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/runner"
 )
 
 // probeRunner is the minimal runner surface a model probe needs; *runner.Exec
@@ -33,7 +34,8 @@ type probeRunner interface {
 // CLIs write their own operator-side state, which a workspace sandbox would
 // break) — pass a zero runner.Exec.
 func ProbeOfferedModels(ctx context.Context, r *runner.Exec, harnesses []harness.Harness,
-	timeout time.Duration) map[string][]string {
+	timeout time.Duration,
+) map[string][]string {
 	out := map[string][]string{}
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -45,9 +47,7 @@ func ProbeOfferedModels(ctx context.Context, r *runner.Exec, harnesses []harness
 		if _, onPath := harness.Available(h); !onPath {
 			continue
 		}
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			offered, err := lister.ListOfferedModels(ctx, probeExec(r, h, timeout))
 			if err != nil || len(offered) == 0 {
 				slog.DebugContext(ctx, "offered-models probe yielded nothing",
@@ -57,7 +57,7 @@ func ProbeOfferedModels(ctx context.Context, r *runner.Exec, harnesses []harness
 			mu.Lock()
 			out[h.ID()] = offered
 			mu.Unlock()
-		}()
+		})
 	}
 	wg.Wait()
 	return out
@@ -68,6 +68,11 @@ func ProbeOfferedModels(ctx context.Context, r *runner.Exec, harnesses []harness
 // wired through scan mode so a probe against a server-style CLI (codex
 // app-server) is killed as soon as its response line arrives while its output
 // is still collected.
+//
+// Every probe runs in its own fresh, empty temp directory, removed afterward,
+// never the caller's working directory: that is normally the repository under
+// test, and a headless `claude -p` runs a project's hooks and connects its
+// MCP servers from there without a trust prompt.
 func probeExec(r probeRunner, h harness.Harness, timeout time.Duration) harness.ProbeExec {
 	return func(ctx context.Context, spec model.CommandSpec, done func(line []byte) bool) ([]byte, error) {
 		cli, ok := harness.Available(h)
@@ -75,6 +80,16 @@ func probeExec(r probeRunner, h harness.Harness, timeout time.Duration) harness.
 			return nil, fmt.Errorf("%s CLI not on PATH", h.ID())
 		}
 		spec.Argv[0] = cli
+		dir, err := os.MkdirTemp("", "evolve-probe-")
+		if err != nil {
+			return nil, fmt.Errorf("%s probe: %w", h.ID(), err)
+		}
+		defer func() {
+			if err := os.RemoveAll(dir); err != nil {
+				slog.DebugContext(ctx, "probe temp dir not removed", slog.String("dir", dir), slog.Any("error", err))
+			}
+		}()
+		spec.Dir = dir
 		if done == nil {
 			res, err := r.Run(ctx, spec, timeout, nil)
 			return res.Stdout, err

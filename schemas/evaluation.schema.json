@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/evaluation.schema.json",
+  "$id": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/evaluation.schema.json",
   "title": "evolve EVALUATION rollup (schema 3)",
   "description": "The machine-readable rollup emitted beside EVALUATION.md (EVALUATION.<ext>; format selected by results_format), aggregating every plugin's stored results per model and per skill, with deltas vs the previous run and the without-skill baseline.",
   "type": "object",

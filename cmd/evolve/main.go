@@ -17,10 +17,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/bitwise-media-group/evolve/internal/cli"
-	"github.com/bitwise-media-group/evolve/internal/profile"
-	"github.com/bitwise-media-group/evolve/internal/telemetry"
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/cli"
+	"github.com/codeactual/evolve/internal/profile"
+	"github.com/codeactual/evolve/internal/telemetry"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 // RootFlags holds the global flags that live outside cli.Options; the rest of

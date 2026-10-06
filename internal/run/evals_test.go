@@ -17,13 +17,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/internal/runner"
-	"github.com/bitwise-media-group/evolve/internal/tokencount"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/tokencount"
 )
 
 // captureReporter records the ItemResults the engine streams so tests can assert
@@ -43,11 +43,13 @@ func (r *captureReporter) BaselineStarted(_ plan.UnitRef, item ItemStart) {
 	defer r.mu.Unlock()
 	r.baselineStarts = append(r.baselineStarts, item)
 }
+
 func (r *captureReporter) ItemDone(_ plan.UnitRef, item ItemResult) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.items = append(r.items, item)
 }
+
 func (r *captureReporter) BaselineDone(_ plan.UnitRef, item ItemResult) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -57,8 +59,8 @@ func (r *captureReporter) UnitFinished(plan.UnitRef, UnitSummary, string) {}
 func (r *captureReporter) Warn(string, ...any)                            {}
 
 // fakeEvalProvider is a harness implementing harness.Harness + EvalRunner
-// (+ model.TokenCounter when counting). reportsUsage=false models a cursor-like
-// harness that reports no usage.
+// (+ model.TokenCounter when counting). reportsUsage=false models a harness
+// that reports no usage.
 type fakeEvalProvider struct {
 	reportsUsage bool
 	priced       bool
@@ -69,6 +71,7 @@ func (f *fakeEvalProvider) Name() string        { return "Fake" }
 func (f *fakeEvalProvider) CLI() []string       { return []string{"sh"} }
 func (f *fakeEvalProvider) EnvKeys() []string   { return []string{"FAKE_KEY"} }
 func (f *fakeEvalProvider) SkillDirs() []string { return []string{filepath.Join(".fake", "skills")} }
+
 func (f *fakeEvalProvider) canonicalModel() model.Model {
 	m := model.Model{
 		ID: "fake/model-1", ProviderID: "fake", Name: "Fake Model 1",
@@ -80,15 +83,29 @@ func (f *fakeEvalProvider) canonicalModel() model.Model {
 	}
 	return m
 }
-func (f *fakeEvalProvider) TriggerSpec(ws, query, cliModelID string, _ bool) model.CommandSpec {
+
+func (f *fakeEvalProvider) TriggerSpec(ws, query, _ string, _ model.InnerSandbox) model.CommandSpec {
 	return model.CommandSpec{Argv: []string{"fake-cli", query}, Dir: ws}
 }
 func (f *fakeEvalProvider) ScanLine([]byte, string, string) (bool, string) { return false, "" }
-func (f *fakeEvalProvider) EvalSpec(ws string, c model.EvalInput, cliModelID string) model.CommandSpec {
+func (f *fakeEvalProvider) EvalSpec(ws string, c model.EvalInput, _ string) model.CommandSpec {
 	// MaxTurns rides along in the argv so judge tests can assert the judge
 	// session runs at the judge turn ceiling.
 	return model.CommandSpec{Argv: []string{"agent-cli", "AGENT", c.Prompt, strconv.Itoa(c.MaxTurns)}, Dir: ws}
 }
+
+// JudgeSpec rides the turn ceiling, prompt and schema in the argv so judge tests
+// can assert what the engine handed the harness.
+func (f *fakeEvalProvider) JudgeSpec(judgeDir string, in model.JudgeInput, _ string) model.CommandSpec {
+	return model.CommandSpec{
+		Argv:      []string{"judge-cli", "JUDGE", in.Prompt, strconv.Itoa(in.MaxTurns), in.Schema},
+		Dir:       judgeDir,
+		ReadPaths: []string{in.Workspace},
+	}
+}
+
+func (f *fakeEvalProvider) ParseJudgeOutput(stdout []byte) ([]byte, error) { return stdout, nil }
+
 func (f *fakeEvalProvider) ParseEvalOutput(stdout []byte) (string, *model.Usage) {
 	if !f.reportsUsage {
 		return string(stdout), nil
@@ -162,7 +179,7 @@ func evalRepoFixture(t *testing.T) *layout.Repo {
 	write := func(rel, content string) {
 		t.Helper()
 		path := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		mustMkdirAll(t, filepath.Dir(path), 0o755)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -199,7 +216,7 @@ func evalRepoWithToolCall(t *testing.T) *layout.Repo {
 	write := func(rel, content string) {
 		t.Helper()
 		path := filepath.Join(root, rel)
-		os.MkdirAll(filepath.Dir(path), 0o755)
+		mustMkdirAll(t, filepath.Dir(path), 0o755)
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -432,7 +449,9 @@ func TestHeadLines(t *testing.T) {
 	}
 }
 
-func TestEvalsCursorLikeProvider(t *testing.T) {
+// TestEvalsProviderWithoutUsage: a provider with no counting API, no usage
+// reporting and no pricing still runs and grades its evals.
+func TestEvalsProviderWithoutUsage(t *testing.T) {
 	repo := evalRepoFixture(t)
 	opts := evalOptions(t, repo, &fakeEvalProvider{reportsUsage: false}) // no counting, no usage, no pricing
 
@@ -447,7 +466,7 @@ func TestEvalsCursorLikeProvider(t *testing.T) {
 	entry := file.Eval("fake/model-1")
 	r := entry.Results[0]
 	if r.Measured != nil || r.Estimate != nil || entry.Pricing != nil {
-		t.Errorf("cursor-like entry leaked usage data: %+v", r)
+		t.Errorf("usage-less entry leaked usage data: %+v", r)
 	}
 	if r.Passed == nil || !*r.Passed {
 		t.Errorf("result = %+v, want graded pass", r)
@@ -468,7 +487,7 @@ func TestEvalsCursorLikeProvider(t *testing.T) {
 func TestEvalsDetectsFailure(t *testing.T) {
 	repo := evalRepoFixture(t)
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "evals.json")
-	os.WriteFile(path, []byte(`{"evals": [{
+	mustWriteFile(t, path, []byte(`{"evals": [{
 		"id": "fails",
 		"prompt": "create the file",
 		"assertions": [{"type": "file_exists", "path": "never-created.txt"}]
@@ -563,7 +582,7 @@ func TestEvalsRuntimeErrorRerunUnderNew(t *testing.T) {
 func TestEvalsFailedRerunsFailingUnit(t *testing.T) {
 	repo := evalRepoFixture(t)
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "evals.json")
-	os.WriteFile(path, []byte(`{"evals": [{
+	mustWriteFile(t, path, []byte(`{"evals": [{
 		"id": "fails",
 		"prompt": "create the file",
 		"assertions": [{"type": "file_exists", "path": "never-created.txt"}]
@@ -635,7 +654,7 @@ func TestEvalsFailedPreservesAndNarrows(t *testing.T) {
 	repo := evalRepoFixture(t)
 	// Two evals: "good" passes (created.txt is made), "bad" fails its assertion.
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "evals.json")
-	os.WriteFile(path, []byte(`{"evals": [
+	mustWriteFile(t, path, []byte(`{"evals": [
 		{"id": "good", "prompt": "create the file", "assertions": [{"type": "file_exists", "path": "created.txt"}]},
 		{"id": "bad", "prompt": "create the file", "assertions": [{"type": "file_exists", "path": "never-created.txt"}]}
 	]}`), 0o644)
@@ -688,9 +707,10 @@ func byID(rs []results.EvalResult) map[string]results.EvalResult {
 // skill was mounted in the workspace — so a test can prove the baseline runs
 // without the skill present.
 type baselineRunner struct {
-	inner     fakeEvalRunner
-	mu        sync.Mutex
-	agentRuns []bool // true when the skill under test was symlinked in
+	inner         fakeEvalRunner
+	baselineFails bool // only the without-skill session fails at runtime
+	mu            sync.Mutex
+	agentRuns     []bool // true when the skill under test was symlinked in
 }
 
 func (r *baselineRunner) Run(ctx context.Context, spec model.CommandSpec, timeout time.Duration, scan *runner.Scan) (runner.Result, error) {
@@ -699,6 +719,9 @@ func (r *baselineRunner) Run(ctx context.Context, spec model.CommandSpec, timeou
 		r.mu.Lock()
 		r.agentRuns = append(r.agentRuns, err == nil)
 		r.mu.Unlock()
+		if err != nil && r.baselineFails {
+			return runner.Result{ExitCode: 1, Elapsed: time.Second}, nil
+		}
 	}
 	return r.inner.Run(ctx, spec, timeout, scan)
 }
@@ -766,6 +789,70 @@ func TestEvalsBaseline(t *testing.T) {
 	}
 	if len(rn3.agentRuns) != 2 {
 		t.Errorf("a fixture change should recompute the baseline: agent runs = %v, want 2", rn3.agentRuns)
+	}
+}
+
+// A failed baseline must not become a permanent cache entry just because its
+// fingerprint matches. Retry selection also has to work when the with-skill
+// result is already complete, so only the baseline supplies the selection gap.
+func TestEvalsBaselineRecovery(t *testing.T) {
+	for _, state := range []string{"runtime error", "incomplete verdict", "passed", "failed"} {
+		t.Run(state, func(t *testing.T) {
+			repo := evalRepoFixture(t)
+			opts := evalOptions(t, repo, &fakeEvalProvider{reportsUsage: true})
+			opts.Baseline = true
+			opts.Runner = &baselineRunner{baselineFails: state == "runtime error"}
+			if _, err := Evals(context.Background(), opts); err != nil {
+				t.Fatal(err)
+			}
+			resultsDir := filepath.Join(repo.Root, "evals", "solo-skill")
+			file, _, err := results.LoadDir(resultsDir, "solo", "solo-skill")
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry := file.Eval(opts.Selected[0].Key())
+			if entry.Results[0].Passed == nil || !*entry.Results[0].Passed {
+				t.Fatal("precondition: the with-skill result must pass")
+			}
+			baseline := &entry.Baseline.Results[0]
+			switch state {
+			case "runtime error":
+				if baseline.RuntimeError == "" || baseline.Passed != nil {
+					t.Fatalf("precondition: expected an errored baseline, got %+v", baseline)
+				}
+			case "incomplete verdict":
+				baseline.Passed = nil
+			case "failed":
+				baseline.Passed = new(false)
+			}
+			if _, err := file.SaveDir(resultsDir, opts.ResultsFormat); err != nil {
+				t.Fatal(err)
+			}
+			retry := state == "runtime error" || state == "incomplete verdict"
+			rn := &baselineRunner{}
+			opts.Runner, opts.New = rn, true
+			if _, err := Evals(context.Background(), opts); err != nil {
+				t.Fatal(err)
+			}
+			if retry {
+				if len(rn.agentRuns) != 2 || rn.agentRuns[0] || !rn.agentRuns[1] {
+					t.Fatalf("recovery agent runs = %v, want baseline then with-skill", rn.agentRuns)
+				}
+			} else if len(rn.agentRuns) != 0 {
+				t.Fatalf("completed baseline should stay cached, agent runs = %v", rn.agentRuns)
+			}
+			file, _, err = results.LoadDir(resultsDir, "solo", "solo-skill")
+			if err != nil {
+				t.Fatal(err)
+			}
+			baseline = &file.Eval(opts.Selected[0].Key()).Baseline.Results[0]
+			if baseline.RuntimeError != "" || baseline.Passed == nil {
+				t.Fatalf("baseline still lacks a verdict after recovery: %+v", baseline)
+			}
+			if wantPass := state != "failed"; *baseline.Passed != wantPass {
+				t.Errorf("baseline passed = %v, want %v", *baseline.Passed, wantPass)
+			}
+		})
 	}
 }
 

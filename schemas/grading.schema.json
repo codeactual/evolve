@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/bitwise-media-group/evolve/main/schemas/grading.schema.json",
+  "$id": "https://raw.githubusercontent.com/codeactual/evolve/main/schemas/grading.schema.json",
   "title": "grading.json (skill-creator superset)",
   "description": "One graded run, compatible with skill-creator's grading.json: an unmodified skill-creator document validates, and evolve's per-eval results embed these shapes (see results.schema.json).",
   "type": "object",

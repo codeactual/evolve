@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/layout"
 )
 
 func approx(t *testing.T, got, want float64) {
@@ -20,7 +20,7 @@ func approx(t *testing.T, got, want float64) {
 }
 
 func TestSizeScore(t *testing.T) {
-	const ideal, cap = 200, 500
+	const ideal, limit = 200, 500
 	tests := []struct {
 		name     string
 		lines    int
@@ -37,7 +37,7 @@ func TestSizeScore(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			approx(t, sizeScore(tt.lines, ideal, cap, tt.exponent), tt.want)
+			approx(t, sizeScore(tt.lines, ideal, limit, tt.exponent), tt.want)
 		})
 	}
 }

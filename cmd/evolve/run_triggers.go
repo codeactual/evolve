@@ -4,13 +4,11 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/run"
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 // TriggersFlags holds the flags for `evolve run triggers`.
@@ -29,14 +27,6 @@ var triggersCmd = &cobra.Command{
 		if err := opts.CheckVersionPin(version.Version, cmd.ErrOrStderr()); err != nil {
 			return err
 		}
-		if isRemote, err := remoteMode(cmd); err != nil {
-			return err
-		} else if isRemote {
-			// Remote runs are plain-output: the TUI's selection form probes
-			// local CLIs, which a remote run deliberately has none of.
-			return runRemote(cmd, &triggersFlags.SweepFlags, plan.Tiers{Triggers: true},
-				triggersFlags.Runs, "", "triggers: some queries failed")
-		}
 		interactive := interactiveTUI(cmd, triggersFlags.NoTUI)
 		if err := reconcileStaleResults(cmd, interactive); err != nil {
 			return err
@@ -52,7 +42,7 @@ var triggersCmd = &cobra.Command{
 		}
 
 		if !triggersFlags.CountOnly {
-			fmt.Fprintf(cmd.OutOrStdout(), "parallelism: %d concurrent agent runs\n", triggersFlags.Jobs)
+			outf(cmd.OutOrStdout(), "parallelism: %d concurrent agent runs\n", triggersFlags.Jobs)
 		}
 		failed, runErr := run.Triggers(cmd.Context(), run.TriggerOptions{
 			Options: common,

@@ -6,19 +6,18 @@ package harness
 import (
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/model"
 )
 
 func TestAllAndByID(t *testing.T) {
 	all := All()
-	if len(all) != 7 {
-		t.Fatalf("All() = %d harnesses, want 7", len(all))
+	if len(all) != 2 {
+		t.Fatalf("All() = %d harnesses, want 2", len(all))
 	}
-	for _, id := range []string{
-		model.HarnessClaude, model.HarnessCodex, model.HarnessGemini,
-		model.HarnessCursor, model.HarnessCopilot, model.HarnessAntigravity,
-		model.HarnessGrok,
-	} {
+	for i, id := range []string{model.HarnessClaude, model.HarnessCodex} {
+		if all[i].ID() != id {
+			t.Errorf("All()[%d] = %q, want %q", i, all[i].ID(), id)
+		}
 		h, ok := ByID(id)
 		if !ok {
 			t.Errorf("ByID(%q) = not found", id)
@@ -33,14 +32,10 @@ func TestAllAndByID(t *testing.T) {
 	}
 }
 
-// TestEvalRunnerCapability pins which harnesses implement EvalRunner: Gemini
-// does not (no gradable headless run), the rest do.
+// TestEvalRunnerCapability pins which harnesses implement EvalRunner: both
+// built-in harnesses have a gradable headless run.
 func TestEvalRunnerCapability(t *testing.T) {
-	want := map[string]bool{
-		model.HarnessClaude: true, model.HarnessCodex: true, model.HarnessGemini: false,
-		model.HarnessCursor: true, model.HarnessCopilot: true, model.HarnessAntigravity: true,
-		model.HarnessGrok: true,
-	}
+	want := map[string]bool{model.HarnessClaude: true, model.HarnessCodex: true}
 	for _, h := range All() {
 		_, isRunner := h.(EvalRunner)
 		if isRunner != want[h.ID()] {
@@ -50,16 +45,10 @@ func TestEvalRunnerCapability(t *testing.T) {
 }
 
 // TestToolCallReporterCapability pins which harnesses can report tool calls
-// from their eval output. Claude and Codex (whose output carries tool
-// invocations) implement it; the envelope/text harnesses, Gemini, and Grok
-// (headless streaming-json has no tool events) do not, so a tool_call assertion
-// against them is skipped.
+// from their eval output. Claude and Codex both emit structured output that
+// carries tool invocations.
 func TestToolCallReporterCapability(t *testing.T) {
-	want := map[string]bool{
-		model.HarnessClaude: true, model.HarnessCodex: true, model.HarnessGemini: false,
-		model.HarnessCursor: false, model.HarnessCopilot: false, model.HarnessAntigravity: false,
-		model.HarnessGrok: false,
-	}
+	want := map[string]bool{model.HarnessClaude: true, model.HarnessCodex: true}
 	for _, h := range All() {
 		_, isReporter := h.(ToolCallReporter)
 		if isReporter != want[h.ID()] {

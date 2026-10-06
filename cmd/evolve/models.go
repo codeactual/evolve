@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bitwise-media-group/evolve/internal/version"
+	"github.com/codeactual/evolve/internal/version"
 )
 
 var modelsCmd = &cobra.Command{
@@ -36,7 +36,7 @@ var modelsCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "MODEL\tNAME\tINPUT $/MTOK\tOUTPUT $/MTOK\tHARNESSES\tPREFERRED\tSTATUS\tSOURCE")
+		outln(w, "MODEL\tNAME\tINPUT $/MTOK\tOUTPUT $/MTOK\tHARNESSES\tPREFERRED\tSTATUS\tSOURCE")
 		for _, m := range models {
 			source := "builtin@" + version.Version
 			if overridden[m.ProviderID] {
@@ -51,7 +51,7 @@ var modelsCmd = &cobra.Command{
 					break
 				}
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			outf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 				m.ID, m.Name, fmtPrice(m.InputUSD), fmtPrice(m.OutputUSD),
 				strings.Join(m.SupportedHarnessIDs(), ","), m.Preferred, status, source)
 		}

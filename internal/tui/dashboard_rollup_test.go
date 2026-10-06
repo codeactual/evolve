@@ -9,10 +9,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/internal/run"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/run"
 )
 
 // TestDashboardLiveFeedback drives the dashboard through a run and checks the
@@ -130,10 +130,14 @@ func TestRollupImprovementsBaselineBasis(t *testing.T) {
 	d.liveBaseline[caseKey{ev, "e1"}] = results.EvalResult{Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)}}
 	d.liveBaseline[caseKey{ev, "e2"}] = results.EvalResult{Passed: new(false), Summary: &results.GradeSummary{PassRate: new(0.0)}}
 	d.apply(unitStartedMsg{ref: ev, total: 2, mode: plan.ModeRun})
-	d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{Index: 0, Label: "e1", Status: plan.StatusPass,
-		Metrics: plan.ItemMetrics{AssertPassed: new(1), AssertTotal: new(1)}}})
-	d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{Index: 1, Label: "e2", Status: plan.StatusFail,
-		Metrics: plan.ItemMetrics{AssertPassed: new(0), AssertTotal: new(1)}}})
+	d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{
+		Index: 0, Label: "e1", Status: plan.StatusPass,
+		Metrics: plan.ItemMetrics{AssertPassed: new(1), AssertTotal: new(1)},
+	}})
+	d.apply(itemDoneMsg{ref: ev, item: run.ItemResult{
+		Index: 1, Label: "e2", Status: plan.StatusFail,
+		Metrics: plan.ItemMetrics{AssertPassed: new(0), AssertTotal: new(1)},
+	}})
 	d.apply(unitFinishedMsg{ref: ev, sum: run.UnitSummary{Executed: true, Passed: 1, Failed: 1, Total: 2}})
 
 	d.tab = tabImprovements

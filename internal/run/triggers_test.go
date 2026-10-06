@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bitwise-media-group/evolve/internal/harness"
-	"github.com/bitwise-media-group/evolve/internal/layout"
-	"github.com/bitwise-media-group/evolve/internal/model"
-	"github.com/bitwise-media-group/evolve/internal/plan"
-	"github.com/bitwise-media-group/evolve/internal/results"
-	"github.com/bitwise-media-group/evolve/internal/runner"
-	"github.com/bitwise-media-group/evolve/internal/tokencount"
+	"github.com/codeactual/evolve/internal/harness"
+	"github.com/codeactual/evolve/internal/layout"
+	"github.com/codeactual/evolve/internal/model"
+	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
+	"github.com/codeactual/evolve/internal/runner"
+	"github.com/codeactual/evolve/internal/tokencount"
 )
 
 // fakeHarness is a test harness that also yields the canonical model the
@@ -42,6 +42,7 @@ func (f *fakeTriggerProvider) Name() string        { return "Fake" }
 func (f *fakeTriggerProvider) CLI() []string       { return []string{"sh"} } // always on PATH
 func (f *fakeTriggerProvider) EnvKeys() []string   { return []string{"FAKE_KEY"} }
 func (f *fakeTriggerProvider) SkillDirs() []string { return []string{filepath.Join(".fake", "skills")} }
+
 func (f *fakeTriggerProvider) canonicalModel() model.Model {
 	m := model.Model{
 		ID: "fake/model-1", ProviderID: "fake", Name: "Fake Model 1",
@@ -53,9 +54,11 @@ func (f *fakeTriggerProvider) canonicalModel() model.Model {
 	}
 	return m
 }
-func (f *fakeTriggerProvider) TriggerSpec(ws, query, cliModelID string, _ bool) model.CommandSpec {
+
+func (f *fakeTriggerProvider) TriggerSpec(ws, query, _ string, _ model.InnerSandbox) model.CommandSpec {
 	return model.CommandSpec{Argv: []string{"fake-cli", query}, Dir: ws}
 }
+
 func (f *fakeTriggerProvider) ScanLine(line []byte, skill, _ string) (bool, string) {
 	return bytes.Contains(line, []byte("ACTIVATE:"+skill)), ""
 }
@@ -205,7 +208,7 @@ func TestTriggersWritesResults(t *testing.T) {
 
 func TestTriggersWithoutCountingCapability(t *testing.T) {
 	repo := triggerRepoFixture(t)
-	opts := triggerOptions(t, repo, &fakeTriggerProvider{}) // cursor-like: no counting, no pricing
+	opts := triggerOptions(t, repo, &fakeTriggerProvider{}) // no counting API, no pricing
 
 	if _, err := Triggers(context.Background(), opts); err != nil {
 		t.Fatal(err)
@@ -273,7 +276,7 @@ func TestTriggersDetectsFailures(t *testing.T) {
 	repo := triggerRepoFixture(t)
 	// Overwrite triggers: expect a trigger on a query the fake never triggers.
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
-	os.WriteFile(path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
+	mustWriteFile(t, path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
 
 	opts := triggerOptions(t, repo, &countingTriggerProvider{})
 	failed, err := Triggers(context.Background(), opts)
@@ -286,6 +289,78 @@ func TestTriggersDetectsFailures(t *testing.T) {
 	file, _, _ := results.LoadDir(filepath.Join(repo.Root, "evals", "solo-skill"), "solo", "solo-skill")
 	if r := file.Trigger("fake/model-1").Results[0]; *r.Passed {
 		t.Errorf("result = %+v, want failed", r)
+	}
+}
+
+// erroringTriggerRunner models an agent CLI that exits non-zero before it ever
+// answers (an authentication or unsupported-model error): no activation line,
+// exit status 1.
+type erroringTriggerRunner struct{}
+
+func (erroringTriggerRunner) Run(context.Context, model.CommandSpec, time.Duration, *runner.Scan) (runner.Result, error) {
+	return runner.Result{ExitCode: 1, StderrTail: "401 Unauthorized", Elapsed: time.Second}, nil
+}
+
+// killedAfterHitRunner models the scan-mode early exit: the runner kills the
+// agent as soon as the activation line appears, so the exit status is -1.
+type killedAfterHitRunner struct{}
+
+func (killedAfterHitRunner) Run(_ context.Context, _ model.CommandSpec, _ time.Duration, scan *runner.Scan) (runner.Result, error) {
+	hit := scan.OnLine([]byte("ACTIVATE:solo-skill"))
+	return runner.Result{Hit: hit, ExitCode: -1, Elapsed: time.Second}, nil
+}
+
+// TestTriggersFailQueriesWhoseRunsErrored: an agent run that exits non-zero
+// without activating the skill never saw the query, so it is no evidence of a
+// non-trigger. Before the fix every such run counted as a clean miss, so a
+// harness that failed every run (here a 401) passed all its should-not-trigger
+// queries.
+func TestTriggersFailQueriesWhoseRunsErrored(t *testing.T) {
+	repo := triggerRepoFixture(t)
+	opts := triggerOptions(t, repo, &fakeTriggerProvider{})
+	opts.Runner = erroringTriggerRunner{}
+	var stdout, stderr bytes.Buffer
+	opts.Stdout, opts.Stderr = &stdout, &stderr
+
+	failed, err := Triggers(context.Background(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !failed {
+		t.Error("failed = false, want true when every agent run errored")
+	}
+	file, _, _ := results.LoadDir(filepath.Join(repo.Root, "evals", "solo-skill"), "solo", "solo-skill")
+	entry := file.Trigger("fake/model-1")
+	if entry == nil || len(entry.Results) != 2 {
+		t.Fatalf("entry = %+v", entry)
+	}
+	for i, r := range entry.Results {
+		if *r.Passed {
+			t.Errorf("query %d passed although every run errored: %+v", i, r)
+		}
+	}
+	out := stdout.String() + stderr.String()
+	for _, want := range []string{"errored", "401 Unauthorized"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestTriggersCountHitDespiteKillExit: the early-exit kill after a hit ends the
+// process with a non-zero status, which must still count as a hit.
+func TestTriggersCountHitDespiteKillExit(t *testing.T) {
+	repo := triggerRepoFixture(t)
+	opts := triggerOptions(t, repo, &fakeTriggerProvider{})
+	opts.Runner = killedAfterHitRunner{}
+
+	if _, err := Triggers(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	file, _, _ := results.LoadDir(filepath.Join(repo.Root, "evals", "solo-skill"), "solo", "solo-skill")
+	r0 := file.Trigger("fake/model-1").Results[0]
+	if *r0.Hits != 3 || !*r0.Passed {
+		t.Errorf("hit with a kill exit status = %+v, want 3 hits and passed", r0)
 	}
 }
 
@@ -318,11 +393,13 @@ func TestTriggersNewRerunsAfterEvalChange(t *testing.T) {
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
 	data, _ := os.ReadFile(path)
 	var spec map[string]any
-	json.Unmarshal(data, &spec)
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
 	spec["triggers"] = append(spec["triggers"].([]any),
 		map[string]any{"query": "brand new please trigger", "should_trigger": true})
 	updated, _ := json.Marshal(spec)
-	os.WriteFile(path, updated, 0o644)
+	mustWriteFile(t, path, updated, 0o644)
 
 	var stdout bytes.Buffer
 	opts.Stdout = &stdout
@@ -343,7 +420,7 @@ func TestTriggersFailedRerunsFailingUnit(t *testing.T) {
 	repo := triggerRepoFixture(t)
 	// A query the fake never triggers though it should: the unit fails.
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
-	os.WriteFile(path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
+	mustWriteFile(t, path, []byte(`{"triggers": [{"query": "never fires", "should_trigger": true}]}`), 0o644)
 
 	opts := triggerOptions(t, repo, &countingTriggerProvider{fakeTriggerProvider{priced: true}})
 	opts.Stdout = io.Discard
@@ -386,11 +463,13 @@ func TestTriggersFailedSkipsPassingIgnoresMissing(t *testing.T) {
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
 	data, _ := os.ReadFile(path)
 	var spec map[string]any
-	json.Unmarshal(data, &spec)
+	if err := json.Unmarshal(data, &spec); err != nil {
+		t.Fatal(err)
+	}
 	spec["triggers"] = append(spec["triggers"].([]any),
 		map[string]any{"query": "unrelated and new", "should_trigger": false})
 	updated, _ := json.Marshal(spec)
-	os.WriteFile(path, updated, 0o644)
+	mustWriteFile(t, path, updated, 0o644)
 
 	stdout.Reset()
 	if _, err := Triggers(context.Background(), opts); err != nil { // --failed only
@@ -422,7 +501,7 @@ func TestTriggersNewMergesAndPrunes(t *testing.T) {
 	// the new query is a gap: the merge must keep "please trigger this", add the
 	// new one, and prune the removed query.
 	path := filepath.Join(repo.Root, "evals", "solo-skill", "triggers.json")
-	os.WriteFile(path, []byte(`{"triggers": [
+	mustWriteFile(t, path, []byte(`{"triggers": [
 		{"query": "please trigger this", "should_trigger": true},
 		{"query": "fresh query", "should_trigger": false}
 	]}`), 0o644)

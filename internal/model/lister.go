@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 )
 
@@ -23,17 +22,17 @@ type DiscoveredModel struct {
 	Name string
 }
 
-// ModelLister enumerates the models a vendor currently serves. Like counting,
+// Lister enumerates the models a vendor currently serves. Like counting,
 // listing is a vendor concern keyed by provider id (see ListerFor): the same
 // registry entry stays valid regardless of which harness drives the model.
-type ModelLister interface {
+type Lister interface {
 	ListModels(ctx context.Context) ([]DiscoveredModel, error)
 }
 
 // ListerFor returns the model-listing client for a provider id, or (nil, false)
-// for a vendor with no listing API (Cursor). Credentials are the same env vars
+// for a vendor with no listing API. Credentials are the same env vars
 // the vendor's counting API reads (CounterEnvKeys).
-func ListerFor(providerID string) (ModelLister, bool) {
+func ListerFor(providerID string) (Lister, bool) {
 	switch providerID {
 	case ProviderAnthropic:
 		return anthropicLister{
@@ -45,18 +44,6 @@ func ListerFor(providerID string) (ModelLister, bool) {
 		return openaiLister{
 			url:     "https://api.openai.com/v1/models",
 			envKeys: CounterEnvKeys(ProviderOpenAI),
-			client:  defaultClient,
-		}, true
-	case ProviderGoogle:
-		return googleLister{
-			url:     "https://generativelanguage.googleapis.com/v1beta/models",
-			envKeys: CounterEnvKeys(ProviderGoogle),
-			client:  defaultClient,
-		}, true
-	case ProviderXAI:
-		return xaiLister{
-			url:     "https://api.x.ai/v1/models",
-			envKeys: CounterEnvKeys(ProviderXAI),
 			client:  defaultClient,
 		}, true
 	}
@@ -135,84 +122,6 @@ func (o openaiLister) ListModels(ctx context.Context) ([]DiscoveredModel, error)
 	return out, nil
 }
 
-// googleLister calls GET /v1beta/models, following nextPageToken. Google's
-// catalog mixes generative and embedding models; only those supporting
-// generateContent are agent-drivable, so the rest are dropped here. The API's
-// "models/" name prefix is stripped to keep ids in the registry namespace.
-type googleLister struct {
-	url     string
-	envKeys []string
-	client  *http.Client
-}
-
-func (g googleLister) ListModels(ctx context.Context) ([]DiscoveredModel, error) {
-	key := firstEnv(g.envKeys)
-	if key == "" {
-		return nil, ErrNoCredential
-	}
-	headers := map[string]string{"x-goog-api-key": key}
-	var out []DiscoveredModel
-	pageToken := ""
-	for {
-		q := url.Values{"pageSize": {"1000"}}
-		if pageToken != "" {
-			q.Set("pageToken", pageToken)
-		}
-		var resp struct {
-			Models []struct {
-				Name        string   `json:"name"`
-				DisplayName string   `json:"displayName"`
-				Methods     []string `json:"supportedGenerationMethods"`
-			} `json:"models"`
-			NextPageToken string `json:"nextPageToken"`
-		}
-		if err := getJSON(ctx, g.client, g.url+"?"+q.Encode(), headers, &resp); err != nil {
-			return nil, fmt.Errorf("google list models: %w", err)
-		}
-		for _, m := range resp.Models {
-			if !slices.Contains(m.Methods, "generateContent") {
-				continue
-			}
-			out = append(out, DiscoveredModel{
-				ID:   strings.TrimPrefix(m.Name, "models/"),
-				Name: m.DisplayName,
-			})
-		}
-		if resp.NextPageToken == "" {
-			return out, nil
-		}
-		pageToken = resp.NextPageToken
-	}
-}
-
-// xaiLister calls GET /v1/models (OpenAI-compatible catalog).
-type xaiLister struct {
-	url     string
-	envKeys []string
-	client  *http.Client
-}
-
-func (x xaiLister) ListModels(ctx context.Context) ([]DiscoveredModel, error) {
-	key := firstEnv(x.envKeys)
-	if key == "" {
-		return nil, ErrNoCredential
-	}
-	headers := map[string]string{"authorization": "Bearer " + key}
-	var resp struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := getJSON(ctx, x.client, x.url, headers, &resp); err != nil {
-		return nil, fmt.Errorf("xai list models: %w", err)
-	}
-	var out []DiscoveredModel
-	for _, m := range resp.Data {
-		out = append(out, DiscoveredModel{ID: m.ID})
-	}
-	return out, nil
-}
-
 // getJSON fetches endpoint and decodes the JSON response into out, returning
 // the status and a response tail on non-2xx.
 func getJSON(ctx context.Context, client *http.Client, endpoint string, headers map[string]string, out any) error {
@@ -227,7 +136,7 @@ func getJSON(ctx context.Context, client *http.Client, endpoint string, headers 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // best-effort: the response was fully read or abandoned
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		tail, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
 		return fmt.Errorf("HTTP %s: %s", resp.Status, strings.TrimSpace(string(tail)))

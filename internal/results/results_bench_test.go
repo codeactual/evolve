@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/bitwise-media-group/evolve/internal/encfmt"
+	"github.com/codeactual/evolve/internal/encfmt"
 )
 
 // loadBenchFile decodes the committed 130 KB go-docs results file — a real,
