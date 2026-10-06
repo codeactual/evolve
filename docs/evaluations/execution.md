@@ -126,7 +126,10 @@ stays portable across machines. The full type reference is in [Assertions](asser
 A high pass rate only means something relative to what the model does _without_ the skill. With `--baseline` (on by
 default), each eval also runs once with **no skill installed**, interleaved with the real run. The gap between the two
 is the skill's measured **lift** — the part of the score the skill is actually responsible for. Baselines are cached and
-recomputed only when the eval or its fixtures change, so they don't re-run every sweep.
+recomputed when the eval or its fixtures change, or when a prior baseline has a runtime error or no verdict. Completed
+baselines stay cached whether they passed or failed, so they don't re-run every sweep. With `--baseline` enabled,
+`--new`, `--failed` and `--modified` also select cases needing baseline recovery and rerun the baseline followed by the
+with-skill case.
 
 ## Writing results
 

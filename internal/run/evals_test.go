@@ -707,9 +707,10 @@ func byID(rs []results.EvalResult) map[string]results.EvalResult {
 // skill was mounted in the workspace — so a test can prove the baseline runs
 // without the skill present.
 type baselineRunner struct {
-	inner     fakeEvalRunner
-	mu        sync.Mutex
-	agentRuns []bool // true when the skill under test was symlinked in
+	inner         fakeEvalRunner
+	baselineFails bool // only the without-skill session fails at runtime
+	mu            sync.Mutex
+	agentRuns     []bool // true when the skill under test was symlinked in
 }
 
 func (r *baselineRunner) Run(ctx context.Context, spec model.CommandSpec, timeout time.Duration, scan *runner.Scan) (runner.Result, error) {
@@ -718,6 +719,9 @@ func (r *baselineRunner) Run(ctx context.Context, spec model.CommandSpec, timeou
 		r.mu.Lock()
 		r.agentRuns = append(r.agentRuns, err == nil)
 		r.mu.Unlock()
+		if err != nil && r.baselineFails {
+			return runner.Result{ExitCode: 1, Elapsed: time.Second}, nil
+		}
 	}
 	return r.inner.Run(ctx, spec, timeout, scan)
 }
@@ -785,6 +789,70 @@ func TestEvalsBaseline(t *testing.T) {
 	}
 	if len(rn3.agentRuns) != 2 {
 		t.Errorf("a fixture change should recompute the baseline: agent runs = %v, want 2", rn3.agentRuns)
+	}
+}
+
+// A failed baseline must not become a permanent cache entry just because its
+// fingerprint matches. Retry selection also has to work when the with-skill
+// result is already complete, so only the baseline supplies the selection gap.
+func TestEvalsBaselineRecovery(t *testing.T) {
+	for _, state := range []string{"runtime error", "incomplete verdict", "passed", "failed"} {
+		t.Run(state, func(t *testing.T) {
+			repo := evalRepoFixture(t)
+			opts := evalOptions(t, repo, &fakeEvalProvider{reportsUsage: true})
+			opts.Baseline = true
+			opts.Runner = &baselineRunner{baselineFails: state == "runtime error"}
+			if _, err := Evals(context.Background(), opts); err != nil {
+				t.Fatal(err)
+			}
+			resultsDir := filepath.Join(repo.Root, "evals", "solo-skill")
+			file, _, err := results.LoadDir(resultsDir, "solo", "solo-skill")
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry := file.Eval(opts.Selected[0].Key())
+			if entry.Results[0].Passed == nil || !*entry.Results[0].Passed {
+				t.Fatal("precondition: the with-skill result must pass")
+			}
+			baseline := &entry.Baseline.Results[0]
+			switch state {
+			case "runtime error":
+				if baseline.RuntimeError == "" || baseline.Passed != nil {
+					t.Fatalf("precondition: expected an errored baseline, got %+v", baseline)
+				}
+			case "incomplete verdict":
+				baseline.Passed = nil
+			case "failed":
+				baseline.Passed = new(false)
+			}
+			if _, err := file.SaveDir(resultsDir, opts.ResultsFormat); err != nil {
+				t.Fatal(err)
+			}
+			retry := state == "runtime error" || state == "incomplete verdict"
+			rn := &baselineRunner{}
+			opts.Runner, opts.New = rn, true
+			if _, err := Evals(context.Background(), opts); err != nil {
+				t.Fatal(err)
+			}
+			if retry {
+				if len(rn.agentRuns) != 2 || rn.agentRuns[0] || !rn.agentRuns[1] {
+					t.Fatalf("recovery agent runs = %v, want baseline then with-skill", rn.agentRuns)
+				}
+			} else if len(rn.agentRuns) != 0 {
+				t.Fatalf("completed baseline should stay cached, agent runs = %v", rn.agentRuns)
+			}
+			file, _, err = results.LoadDir(resultsDir, "solo", "solo-skill")
+			if err != nil {
+				t.Fatal(err)
+			}
+			baseline = &file.Eval(opts.Selected[0].Key()).Baseline.Results[0]
+			if baseline.RuntimeError != "" || baseline.Passed == nil {
+				t.Fatalf("baseline still lacks a verdict after recovery: %+v", baseline)
+			}
+			if wantPass := state != "failed"; *baseline.Passed != wantPass {
+				t.Errorf("baseline passed = %v, want %v", *baseline.Passed, wantPass)
+			}
+		})
 	}
 }
 

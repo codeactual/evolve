@@ -14,6 +14,7 @@ import (
 	"github.com/codeactual/evolve/internal/layout"
 	"github.com/codeactual/evolve/internal/model"
 	"github.com/codeactual/evolve/internal/plan"
+	"github.com/codeactual/evolve/internal/results"
 )
 
 // planRepoFixture builds a single-plugin repo whose one skill has both triggers
@@ -251,6 +252,51 @@ func TestNeedsBaselineAdditiveWithNew(t *testing.T) {
 	}
 	if notes[ec] != ReasonBaselineMissing.String() {
 		t.Errorf("note = %q, want %q", notes[ec], ReasonBaselineMissing.String())
+	}
+}
+
+func TestNeedsBaselineRecovery(t *testing.T) {
+	for _, state := range []string{"runtime error", "incomplete verdict", "passed", "failed"} {
+		t.Run(state, func(t *testing.T) {
+			repo := evalRepoFixture(t)
+			opts := evalOptions(t, repo, &fakeEvalProvider{reportsUsage: true})
+			opts.Baseline = true
+			opts.Stdout, opts.Stderr = io.Discard, io.Discard
+			if _, err := Evals(context.Background(), opts); err != nil {
+				t.Fatal(err)
+			}
+			resultsDir := filepath.Join(repo.Root, "evals", "solo-skill")
+			file, _, err := results.LoadDir(resultsDir, "solo", "solo-skill")
+			if err != nil {
+				t.Fatal(err)
+			}
+			baseline := &file.Eval(opts.Selected[0].Key()).Baseline.Results[0]
+			switch state {
+			case "runtime error":
+				baseline.RuntimeError, baseline.Passed = "quota exhausted", nil
+			case "incomplete verdict":
+				baseline.Passed = nil
+			case "failed":
+				baseline.Passed = new(false)
+			}
+			if _, err := file.SaveDir(resultsDir, opts.ResultsFormat); err != nil {
+				t.Fatal(err)
+			}
+			cat, err := Catalog(opts.Options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			opts.New = true
+			n, notes := Needs(opts.Options, cat, opts.Selected, plan.Tiers{Evals: true}, "")
+			ec := plan.CaseRef{Skill: "solo-skill", Kind: plan.KindEvals, Case: "basic"}
+			want := state == "runtime error" || state == "incomplete verdict"
+			if got := n[opts.Selected[0].Key()][ec]; got != want {
+				t.Errorf("baseline recovery selected = %v, want %v", got, want)
+			}
+			if want && notes[ec] != ReasonBaselineMissing.String() {
+				t.Errorf("note = %q, want %q", notes[ec], ReasonBaselineMissing.String())
+			}
+		})
 	}
 }
 

@@ -341,14 +341,15 @@ func evalBaselineNeeded(file *results.File, key string, c evalspec.Eval, execute
 }
 
 // baselineStale reports whether eval id needs its baseline (re)computed: missing
-// from the prior snapshot, or recorded against a different eval fingerprint.
+// from the prior snapshot, lacking a completed verdict, or recorded against a
+// different eval fingerprint. A completed failing verdict is still cacheable.
 func baselineStale(prior *results.EvalSnapshot, id, fp string) bool {
 	if prior == nil {
 		return true
 	}
 	for _, r := range prior.Results {
 		if r.ID == id {
-			return r.Fingerprint != fp
+			return r.RuntimeError != "" || r.Passed == nil || r.Fingerprint != fp
 		}
 	}
 	return true
